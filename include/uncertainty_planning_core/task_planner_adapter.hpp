@@ -374,7 +374,7 @@ private:
     std::map<uint64_t, std::vector<size_t>> cluster_map;
     for (size_t idx = 0; idx < particles.size(); idx++)
     {
-      const State& config = particles[idx].ResultConfig();
+      const State& config = particles.at(idx).ResultConfig();
       const uint64_t particle_readiness
           = ComputeStateReadiness(config);
       cluster_map[particle_readiness].push_back(idx);
@@ -394,11 +394,11 @@ private:
     if (cluster.size() > 0)
     {
       const uint64_t parent_cluster_readiness
-          = ComputeStateReadiness(cluster[0]);
+          = ComputeStateReadiness(cluster.at(0));
       for (size_t idx = 1; idx < cluster.size(); idx++)
       {
         const uint64_t current_particle_readiness
-            = ComputeStateReadiness(cluster[idx]);
+            = ComputeStateReadiness(cluster.at(idx));
         if (parent_cluster_readiness != current_particle_readiness)
         {
           throw std::runtime_error("Invalid parent cluster");
@@ -407,16 +407,16 @@ private:
       std::vector<uint8_t> particle_cluster_membership(particles.size(), 0x00);
       for (size_t idx = 0; idx < particles.size(); idx++)
       {
-        const State& config = particles[idx].ResultConfig();
+        const State& config = particles.at(idx).ResultConfig();
         const uint64_t particle_readiness
             = ComputeStateReadiness(config);
         if (parent_cluster_readiness == particle_readiness)
         {
-          particle_cluster_membership[idx] = 0x01;
+          particle_cluster_membership.at(idx) = 0x01;
         }
         else
         {
-          particle_cluster_membership[idx] = 0x00;
+          particle_cluster_membership.at(idx) = 0x00;
         }
       }
       return particle_cluster_membership;
@@ -445,7 +445,7 @@ private:
     propagated_points.reserve(start_positions.size());
     for (size_t idx = 0; idx < start_positions.size(); idx++)
     {
-      const State& initial_particle = start_positions[idx];
+      const State& initial_particle = start_positions.at(idx);
       const std::vector<SimulationResult<State>> results
           = PerformBestAvailablePrimitive(initial_particle);
       propagated_points.insert(propagated_points.end(),
@@ -476,10 +476,10 @@ private:
     propagated_points.reserve(start_positions.size());
     for (size_t idx = 0; idx < start_positions.size(); idx++)
     {
-      const State& initial_particle = start_positions[idx];
+      const State& initial_particle = start_positions.at(idx);
       const State& target_position
-          = (target_positions.size() > 1) ? target_positions[idx]
-                                          : target_positions[0];
+          = (target_positions.size() > 1) ? target_positions.at(idx)
+                                          : target_positions.at(0);
       const std::vector<SimulationResult<State>> results
           = PerformTargettedPrimitive(initial_particle, target_position);
       propagated_points.insert(propagated_points.end(),
@@ -501,10 +501,11 @@ private:
     for (size_t idx = 0; idx < raw_primitive_results.size(); idx++)
     {
       primitive_results.emplace_back(
-            SimulationResult<State>(raw_primitive_results[idx],
-                             raw_primitive_results[idx],
-                             false,
-                             is_primitive_outcome_nominally_independent));
+            SimulationResult<State>(
+                raw_primitive_results.at(idx),
+                raw_primitive_results.at(idx),
+                false,
+                is_primitive_outcome_nominally_independent));
     }
     primitive_results.shrink_to_fit();
     return primitive_results;
@@ -516,7 +517,8 @@ private:
     double best_primitive_ranking = 0.0;
     for (size_t idx = 0; idx < primitives_.size(); idx++)
     {
-      const ActionPrimitivePtr<State, StateAlloc>& primitive = primitives_[idx];
+      const ActionPrimitivePtr<State, StateAlloc>& primitive =
+          primitives_.at(idx);
       if (primitive->IsCandidate(start))
       {
         const double primitive_ranking = primitive->Ranking();
@@ -540,7 +542,7 @@ private:
     if (best_primitive_idx >= 0)
     {
       const ActionPrimitivePtr<State, StateAlloc>& best_primitive
-          = primitives_[static_cast<size_t>(best_primitive_idx)];
+          = primitives_.at(static_cast<size_t>(best_primitive_idx));
       Log("Performing best available primitive ["
           + best_primitive->Name() + "] with ranking "
           + std::to_string(best_primitive->Ranking()), 2);
@@ -551,9 +553,9 @@ private:
       complete_results.reserve(primitive_results.size());
       for (size_t idx = 0; idx < primitive_results.size(); idx++)
       {
-        const State& result_state = primitive_results[idx].first;
+        const State& result_state = primitive_results.at(idx).first;
         const bool outcome_is_nominally_independent
-            = primitive_results[idx].second;
+            = primitive_results.at(idx).second;
         const bool did_contact = false; // Contact has no meaning here
         complete_results.emplace_back(
               SimulationResult<State>(result_state,
@@ -579,7 +581,7 @@ private:
     if (best_primitive_idx >= 0)
     {
       const ActionPrimitivePtr<State, StateAlloc>& best_primitive
-          = primitives_[static_cast<size_t>(best_primitive_idx)];
+          = primitives_.at(static_cast<size_t>(best_primitive_idx));
       Log("Executing best available primitive ["
           + best_primitive->Name() + "] with ranking "
           + std::to_string(best_primitive->Ranking()), 2);
@@ -640,9 +642,10 @@ private:
     #pragma omp parallel for
     for (size_t idx = 1; idx < tree.size(); idx++)
     {
-      auto& current_state = tree[idx];
-      // Only check against states enabled for NN checks
-      if (current_state.GetValueImmutable().UseForNearestNeighbors())
+      auto& current_state = tree.at(idx);
+      // Only check against leaf states enabled for NN checks
+      if (current_state.GetChildIndices().empty() &&
+          current_state.GetValueImmutable().UseForNearestNeighbors())
       {
         auto particles
             = current_state.GetValueImmutable().GetParticlePositionsImmutable();
@@ -654,10 +657,10 @@ private:
   #else
         const size_t current_thread_id = 0;
   #endif
-        if (state_readiness > per_thread_bests[current_thread_id].second)
+        if (state_readiness > per_thread_bests.at(current_thread_id).second)
         {
-          per_thread_bests[current_thread_id].first = (int64_t)idx;
-          per_thread_bests[current_thread_id].second = state_readiness;
+          per_thread_bests.at(current_thread_id).first = (int64_t)idx;
+          per_thread_bests.at(current_thread_id).second = state_readiness;
         }
       }
     }
@@ -665,8 +668,9 @@ private:
     uint64_t best_state_readiness = 0;
     for (size_t idx = 0; idx < per_thread_bests.size(); idx++)
     {
-      const uint64_t thread_best_state_readiness = per_thread_bests[idx].second;
-      const int64_t thread_best_index = per_thread_bests[idx].first;
+      const uint64_t thread_best_state_readiness =
+          per_thread_bests.at(idx).second;
+      const int64_t thread_best_index = per_thread_bests.at(idx).first;
       if (thread_best_index >= 0)
       {
         if (thread_best_state_readiness > best_state_readiness)
@@ -750,13 +754,13 @@ private:
          cluster_idx < index_clusters.size();
          cluster_idx++)
     {
-      const std::vector<size_t>& cluster = index_clusters[cluster_idx];
+      const std::vector<size_t>& cluster = index_clusters.at(cluster_idx);
       std::vector<SimulationResult<State>> final_cluster;
       final_cluster.reserve(cluster.size());
       for (size_t element_idx = 0; element_idx < cluster.size(); element_idx++)
       {
         total_particles++;
-        const size_t particle_idx = cluster[element_idx];
+        const size_t particle_idx = cluster.at(element_idx);
         const SimulationResult<State>& particle = particles.at(particle_idx);
         final_cluster.push_back(particle);
       }
@@ -799,7 +803,7 @@ private:
     // Get the target position;
     for (size_t ndx = 0; ndx < parent_cluster_membership.size(); ndx++)
     {
-      if (parent_cluster_membership[ndx] > 0)
+      if (parent_cluster_membership.at(ndx) > 0)
       {
         reached_parent++;
       }
@@ -815,6 +819,8 @@ private:
                           const double step_size,
                           const uint32_t planner_action_try_attempts)
   {
+    const uint64_t parent_readiness =
+        ComputeStateReadiness(nearest.GetExpectation());
     // Increment the transition ID
     transition_id_++;
     const uint64_t current_forward_transition_id = transition_id_;
@@ -837,7 +843,7 @@ private:
     for (size_t idx = 0; idx < particle_clusters.size(); idx++)
     {
       const std::vector<SimulationResult<State>>& current_cluster
-          = particle_clusters[idx];
+          = particle_clusters.at(idx);
       if (current_cluster.size() > 0)
       {
         state_counter_++;
@@ -848,13 +854,25 @@ private:
         bool action_is_nominally_independent = true;
         for (size_t pdx = 0; pdx < current_cluster.size(); pdx++)
         {
-          particle_locations.push_back(current_cluster[pdx].ResultConfig());
-          if (current_cluster[pdx].OutcomeIsNominallyIndependent() == false)
+          particle_locations.push_back(current_cluster.at(pdx).ResultConfig());
+          if (current_cluster.at(pdx).OutcomeIsNominallyIndependent() == false)
           {
             action_is_nominally_independent = false;
           }
         }
         particle_locations.shrink_to_fit();
+        // Safety check that all child states have higher readiness than their
+        // parent. Note that clusters must have the same readiness, so we only
+        // need to check one of the propagated states.
+        const uint64_t current_readiness =
+            ComputeStateReadiness(particle_locations.at(0));
+        if (current_readiness <= parent_readiness) {
+          throw std::runtime_error(
+              "Child [" + std::to_string(idx) + "] readiness ["
+              + std::to_string(current_readiness)
+              + "] must be better than parent readiness ["
+              + std::to_string(parent_readiness) + "]");
+        }
         const uint32_t reverse_attempt_count = (uint32_t)current_cluster.size();
         const uint32_t reverse_reached_count = 0u;
         const double effective_edge_feasibility
@@ -876,8 +894,8 @@ private:
         propagated_state.UpdateReverseAttemptAndReachedCounts(
               reverse_edge_check.first, reverse_edge_check.second);
         // Store the state
-        result_states[idx].first = propagated_state;
-        result_states[idx].second = -1;
+        result_states.at(idx).first = propagated_state;
+        result_states.at(idx).second = -1;
       }
     }
     Log("Forward simultation produced " + std::to_string(result_states.size())
@@ -889,7 +907,7 @@ private:
       // their effective edge P(feasibility)
       for (size_t idx = 0; idx < result_states.size(); idx++)
       {
-        TaskPlanningState& current_state = result_states[idx].first;
+        TaskPlanningState& current_state = result_states.at(idx).first;
         double percent_active = 1.0;
         double p_reached = 0.0;
         for (uint32_t try_attempt = 0;
@@ -908,7 +926,7 @@ private:
             if (other_idx != idx)
             {
               const TaskPlanningState& other_state
-                  = result_states[other_idx].first;
+                  = result_states.at(other_idx).first;
               // Only if this state has nominally independent outcomes can we
               // expect particles that return to the parent to actually reach
               // a different outcome in future repeats
@@ -1233,7 +1251,7 @@ public:
         int64_t best_outcome_idx = -1;
         for (size_t idx = 0; idx < action_results.size(); idx++)
         {
-          const State& candidate_outcome = action_results[idx];
+          const State& candidate_outcome = action_results.at(idx);
           const TaskPlanningPolicyQuery speculative_query_response
               = speculative_policy_copy.QueryBestAction(
                   desired_transition_id, candidate_outcome,
@@ -1252,7 +1270,7 @@ public:
               + " results selected best outcome "
               + std::to_string(best_outcome_idx) + " with expected cost "
               + std::to_string(best_outcome_cost), 2);
-          const State& best_outcome = action_results[best_outcome_idx];
+          const State& best_outcome = action_results.at(best_outcome_idx);
           execution_trace.push_back(best_outcome);
           post_outcome_callback_fn(action_results, best_outcome_idx);
         }
@@ -1337,7 +1355,8 @@ public:
   {
     for (size_t idx = 0; idx < primitives_.size(); idx++)
     {
-      const ActionPrimitivePtr<State, StateAlloc>& primitive = primitives_[idx];
+      const ActionPrimitivePtr<State, StateAlloc>& primitive =
+          primitives_.at(idx);
       if (primitive->Name() == new_primitive->Name())
       {
         throw std::invalid_argument("New planning primitive with name ["
@@ -1370,7 +1389,7 @@ public:
     if (best_primitive_idx >= 0)
     {
       const ActionPrimitivePtr<State, StateAlloc>& best_primitive
-          = primitives_[static_cast<size_t>(best_primitive_idx)];
+          = primitives_.at(static_cast<size_t>(best_primitive_idx));
       return best_primitive->Name();
     }
     else
@@ -1415,7 +1434,7 @@ public:
   #else
     const size_t thread_id = 0;
   #endif
-    return rngs_[thread_id];
+    return rngs_.at(thread_id);
   }
 
   virtual std::map<std::string, double> GetStatistics() const

@@ -13,14 +13,16 @@ While the planner and execution policy are themselves template-based, this packa
 
 ## Dependencies
 
-- [arc_utilities](https://github.com/UM-ARM-LAB/arc_utilities)
+- [common_robotics_utilities](https://github.com/calderpg/common_robotics_utilities)
  
 Provides a range of utility and math functions, as well as templated implementations of kinodynamic RRT, Dijkstra's algorithm, and hierarchical clustering.
 
-- [ROS Kinetic](http://ros.org)
+- [ROS](http://ros.org)
 
-ROS is required for the build system, Catkin, and for RViz, which the planner uses as an optional visualization interface.
+ROS is required for the build system, Catkin, and for RViz, which the planner uses as an optional visualization interface. ROS Melodic is officially supported, but ROS Kinetic should also be compatible.
 
 ## Examples
 
-To see several examples of using the planner and execution policy, see [uncertainty_planning_examples](https://github.com/UM-ARM-LAB/uncertainty_planning_examples) *Note - these examples are not up-to-date*
+A task planning example is included in this package.
+
+To see several old examples of using the planner and execution policy, see [uncertainty_planning_examples](https://github.com/UM-ARM-LAB/uncertainty_planning_examples) *Note - these examples are not up-to-date*

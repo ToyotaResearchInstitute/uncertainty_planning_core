@@ -35,22 +35,49 @@ public:
 
   static uint64_t GetStateReadiness(const PutInBoxState& state)
   {
-    const uint64_t BOX_OPEN = 0x01;
-    const uint64_t NUM_OBJECTS_KNOWN = 0x02;
-    const uint64_t OBJECTS_ALL_PUT_AWAY = 0x04;
-    uint64_t state_readiness = 0u;
-    if (state.BoxOpen())
+    // Readiness for the state of the box.
+    const uint8_t BOX_READY_OPEN = 0x01;
+    const uint8_t BOX_READY_CLOSED = 0x02;
+    uint8_t box_readiness = 0x00;
+    if (state.ObjectsAvailable() > 0)
     {
-      state_readiness |= BOX_OPEN;
-    }
-    if (state.ObjectsAvailable() >= 0)
-    {
-      state_readiness |= NUM_OBJECTS_KNOWN;
-      if (state.ObjectsAvailable() == 0)
+      if (state.BoxOpen())
       {
-        state_readiness |= OBJECTS_ALL_PUT_AWAY;
+        box_readiness |= BOX_READY_OPEN;
       }
     }
+    else if (state.ObjectsAvailable() == 0)
+    {
+      if (!state.BoxOpen())
+      {
+        box_readiness |= BOX_READY_CLOSED;
+      }
+    }
+    // Readiness for where we are in completing the task.
+    const uint8_t NUM_OBJECTS_KNOWN = 0x01;
+    const uint8_t OBJECTS_ALL_PUT_AWAY = 0x02;
+    uint8_t task_readiness = 0x00;
+    if (state.ObjectsAvailable() >= 0)
+    {
+      task_readiness |= NUM_OBJECTS_KNOWN;
+      if (state.ObjectsAvailable() == 0)
+      {
+        task_readiness |= OBJECTS_ALL_PUT_AWAY;
+      }
+    }
+    // Readiness for where we are in handling the active object.
+    const uint8_t ACTIVE_OBJECT_PUT_AWAY = 0x01;
+    uint8_t active_object_readiness = 0x00;
+    if (state.ObjectPutAway())
+    {
+      active_object_readiness |= ACTIVE_OBJECT_PUT_AWAY;
+    }
+    // Combine into state readiness.
+    uint64_t state_readiness =
+        static_cast<uint64_t>(task_readiness) |
+        static_cast<uint64_t>(static_cast<uint64_t>(box_readiness) << 8) |
+        static_cast<uint64_t>(
+            static_cast<uint64_t>(active_object_readiness) << 16);
     return state_readiness;
   }
 
@@ -67,8 +94,11 @@ public:
 
   static bool IsSingleExecutionComplete(const PutInBoxState& state)
   {
-    if (((state.ObjectsAvailable() > 0) && (state.ObjectPutAway() == true))
-        || ((state.ObjectsAvailable() == 0) && (state.BoxOpen() == false)))
+    if (IsTaskComplete(state))
+    {
+      return true;
+    }
+    else if ((state.ObjectsAvailable() > 0) && (state.ObjectPutAway() == true))
     {
       return true;
     }

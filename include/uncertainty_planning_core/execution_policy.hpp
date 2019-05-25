@@ -1849,12 +1849,15 @@ private:
       child_states[idx] = current_child;
     }
     return ComputeTransitionGoalProbability(
-        child_states, edge_attempt_threshold);
+        child_states, edge_attempt_threshold, logging_fn_);
   }
 
-  double ComputeTransitionGoalProbability(
+public:
+
+  static double ComputeTransitionGoalProbability(
       const std::vector<UncertaintyPlanningState>& child_nodes,
-      const uint32_t planner_action_try_attempts) const
+      const uint32_t planner_action_try_attempts,
+      const std::function<void(const std::string&, const int32_t)>& logging_fn)
   {
     // Let's handle the special cases first
     // The most common case - a non-split transition
@@ -1872,126 +1875,50 @@ private:
     // Let's handle the split case(s)
     else
     {
-      // We do this the right way
-      std::vector<double> action_outcomes_dependent_child_p_goal_reached;
-      std::vector<double> action_outcomes_independent_child_p_goal_reached;
-      // For each child state, we compute the probability that we'll end up at
-      // each of the result states, accounting for try/retry with reversibility
-      // This lets us compare child states as if they were separate actions, so
-      // the overall P(goal reached) = max(child) P(goal reached | child)
-      for (size_t idx = 0; idx < child_nodes.size(); idx++)
+      double percent_active = 1.0;
+      double total_p_goal_reached = 0.0;
+      for (uint32_t try_attempt = 0;
+           try_attempt < planner_action_try_attempts; try_attempt++)
       {
-        // Get the current child
-        const UncertaintyPlanningState& current_child = child_nodes[idx];
-        // For the selected child, we keep track of the probability that we
-        // reach the goal directly via the child state AND the probability that
-        // we reach the goal from unintended other child states
-        double percent_active = 1.0;
-        double p_we_reached_goal = 0.0;
-        double p_others_reached_goal = 0.0;
-        for (uint32_t try_attempt = 0;
-             try_attempt < planner_action_try_attempts; try_attempt++)
+        for (const UncertaintyPlanningState& current_child : child_nodes)
         {
-          // How many particles got to our state on this attempt?
-          const double p_reached
-              = percent_active * current_child.GetRawEdgePfeasibility();
-          // Children with negative P(goal feasibility) cannot reach the goal
-          // directly, and thus get P(goal reached)=0 here
-          const double raw_child_goal_Pfeasibility
-              = current_child.GetGoalPfeasibility();
-          const double child_goal_Pfeasibility
-              = (raw_child_goal_Pfeasibility > 0.0)
-                ? raw_child_goal_Pfeasibility : 0.0;
-          const double p_we_reached = p_reached * child_goal_Pfeasibility;
-          p_we_reached_goal += p_we_reached;
-          // Update the percent of particles that are still usefully active
-          // and the probability that the goal was reached via a different child
-          double updated_percent_active = 0.0;
-          double p_others_reached = 0.0;
-          for (size_t other_idx = 0; other_idx < child_nodes.size();
-               other_idx++)
-          {
-            if (other_idx != idx)
-            {
-              // Get the other child
-              const UncertaintyPlanningState& other_child
-                  = child_nodes[other_idx];
-              // CORRECTION (TODO: is this right?) If it is not independent, we
-              // cannot reach it if we are not there! Only if this state has
-              // nominally independent outcomes can we expect particles that
-              // return to the parent to actually reach a different outcome in
-              // future repeats
-              if (other_child.IsActionOutcomeNominallyIndependent())
-              {
-                const double p_reached_other
-                    = percent_active * other_child.GetRawEdgePfeasibility();
-                const double p_stuck_at_other
-                    = p_reached_other
-                      * (1.0 - other_child.GetReverseEdgePfeasibility());
-                // Children with negative P(goal feasibility) cannot reach the
-                // goal directly, and thus get P(goal reached)=0 here
-                const double raw_other_child_goal_Pfeasibility
-                    = other_child.GetGoalPfeasibility();
-                const double other_child_goal_Pfeasibility
-                    = (raw_other_child_goal_Pfeasibility > 0.0)
-                        ? raw_other_child_goal_Pfeasibility : 0.0;
-                const double p_reached_goal_from_other
-                    = p_stuck_at_other * other_child_goal_Pfeasibility;
-                p_others_reached += p_reached_goal_from_other;
-                const double p_returned_to_parent
-                    = p_reached_other
-                      * other_child.GetReverseEdgePfeasibility();
-                updated_percent_active += p_returned_to_parent;
-              }
-            }
-          }
-          p_others_reached_goal += p_others_reached;
-          percent_active = updated_percent_active;
-        }
-        double p_reached_goal = p_we_reached_goal + p_others_reached_goal;
-        if ((p_reached_goal < 0.0) || (p_reached_goal > 1.0))
-        {
-          if ((p_reached_goal >= 0.0) && (p_reached_goal <= 1.001))
-          {
-            Log("WARNING - P(reached goal) = " + std::to_string(p_reached_goal)
-                + " > 1.0 (probably numerical error)", 1);
-            p_reached_goal = 1.0;
-          }
-          else
-          {
-            throw std::runtime_error("p_reached_goal out of range [0, 1]");
-          }
-        }
-        if (current_child.IsActionOutcomeNominallyIndependent())
-        {
-          action_outcomes_independent_child_p_goal_reached.push_back(
-              p_reached_goal);
-        }
-        else
-        {
-          action_outcomes_dependent_child_p_goal_reached.push_back(
-              p_reached_goal);
+          const double percent_reached_child =
+              percent_active * current_child.GetRawEdgePfeasibility();
+          const double raw_child_goal_Pfeasibility =
+              current_child.GetGoalPfeasibility();
+          const double child_goal_Pfeasibility =
+              (raw_child_goal_Pfeasibility > 0.0) ?
+                  raw_child_goal_Pfeasibility : 0.0;
+          const double percent_reached_goal =
+              percent_reached_child * child_goal_Pfeasibility;
+          total_p_goal_reached += percent_reached_goal;
+          // Update percent active
+          // Anything that reached the goal is no longer active.
+          percent_active -= percent_reached_goal;
+          // Do any return to the parent?
+          const double percent_not_reached_goal =
+              percent_reached_child * (1.0 - child_goal_Pfeasibility);
+          const double p_return_to_parent =
+              (current_child.IsActionOutcomeNominallyIndependent()) ?
+                  current_child.GetReverseEdgePfeasibility() : 0.0;
+          const double p_stuck_here = 1.0 - p_return_to_parent;
+          const double percent_stuck_here =
+                  percent_not_reached_goal * p_stuck_here;
+          // Anything stuck at the child state is no longer active.
+          percent_active -= percent_stuck_here;
         }
       }
-      const double dependent_child_goal_reached_probability
-          = common_robotics_utilities::math::Sum(
-              action_outcomes_dependent_child_p_goal_reached);
-      const double independent_child_goal_reached_probability
-          = (action_outcomes_independent_child_p_goal_reached.size() > 0)
-            ? *std::max_element(
-                  action_outcomes_independent_child_p_goal_reached.begin(),
-                  action_outcomes_independent_child_p_goal_reached.end())
-            : 0.0;
-      const double total_p_goal_reached
-          = independent_child_goal_reached_probability
-            + dependent_child_goal_reached_probability;
       if ((total_p_goal_reached >= 0.0) && (total_p_goal_reached <= 1.0))
       {
+        logging_fn(
+            "Computed total P(goal reached) = "
+            + std::to_string(total_p_goal_reached), 1);
         return total_p_goal_reached;
       }
       else if ((total_p_goal_reached >= 0.0) && (total_p_goal_reached <= 1.001))
       {
-        Log("WARNING - total P(goal reached) = "
+        logging_fn(
+            "WARNING - total P(goal reached) = "
             + std::to_string(total_p_goal_reached)
             + " > 1.0 (probably numerical error)", 1);
         return 1.0;
