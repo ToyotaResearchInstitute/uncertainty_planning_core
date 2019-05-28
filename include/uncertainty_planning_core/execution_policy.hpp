@@ -1880,10 +1880,11 @@ public:
       for (uint32_t try_attempt = 0;
            try_attempt < planner_action_try_attempts; try_attempt++)
       {
+        const double attempt_percent_active = percent_active;
         for (const UncertaintyPlanningState& current_child : child_nodes)
         {
           const double percent_reached_child =
-              percent_active * current_child.GetRawEdgePfeasibility();
+              attempt_percent_active * current_child.GetRawEdgePfeasibility();
           const double raw_child_goal_Pfeasibility =
               current_child.GetGoalPfeasibility();
           const double child_goal_Pfeasibility =
