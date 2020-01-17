@@ -57,11 +57,9 @@ inline std::vector<Configuration, ConfigAlloc> ExtractTrajectoryFromTrace(
   std::vector<Configuration, ConfigAlloc> execution_trajectory;
   execution_trajectory.reserve(trace.resolver_steps.size());
   // Each step corresponds to a controller interval timestep in the real world
-  for (size_t step_idx = 0; step_idx < trace.resolver_steps.size(); step_idx++)
+  for (const auto& step_trace : trace.resolver_steps)
   {
     // Each step trace is the entire resolver history of the motion
-    const ForwardSimulationResolverTrace<Configuration, ConfigAlloc>& step_trace
-        = trace.resolver_steps[step_idx];
     // Get the current trace segment
     if (step_trace.contact_resolver_steps.empty())
     {

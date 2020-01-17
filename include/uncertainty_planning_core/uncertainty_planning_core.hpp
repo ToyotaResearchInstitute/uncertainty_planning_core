@@ -152,7 +152,7 @@ namespace uncertainty_planning_core
     using UncertaintyPlanningTreeState = common_robotics_utilities::simple_rrt_planner::SimpleRRTPlannerState<UncertaintyPlanningState<Configuration, ConfigSerializer, ConfigAlloc>>;
 
     template<typename Configuration, typename ConfigSerializer, typename ConfigAlloc>
-    using UncertaintyPlanningTree = std::vector<UncertaintyPlanningTreeState<Configuration, ConfigSerializer, ConfigAlloc>>;
+    using UncertaintyPlanningTree = common_robotics_utilities::simple_rrt_planner::PlanningTree<UncertaintyPlanningState<Configuration, ConfigSerializer, ConfigAlloc>>;
 
     // Typedefs for user-provided goal check functions
 

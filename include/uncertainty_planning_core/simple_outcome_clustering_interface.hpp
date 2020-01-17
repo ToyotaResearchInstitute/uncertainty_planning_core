@@ -32,7 +32,7 @@ public:
 
   virtual void ResetStatistics() = 0;
 
-  virtual std::vector<std::vector<size_t>> ClusterParticles(
+  virtual std::vector<std::vector<int64_t>> ClusterParticles(
       const std::shared_ptr<Robot>& robot,
       const std::vector<SimulationResult<Configuration>>& particles,
       const std::function<void(

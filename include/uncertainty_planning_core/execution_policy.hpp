@@ -28,7 +28,8 @@ private:
       Configuration, ConfigSerializer, ConfigAlloc> UncertaintyPlanningState;
   typedef common_robotics_utilities::simple_rrt_planner::SimpleRRTPlannerState<
       UncertaintyPlanningState> UncertaintyPlanningTreeState;
-  typedef std::vector<UncertaintyPlanningTreeState> UncertaintyPlanningTree;
+  typedef common_robotics_utilities::simple_rrt_planner::PlanningTree<
+      UncertaintyPlanningState> UncertaintyPlanningTree;
   typedef common_robotics_utilities::simple_graph::GraphNode<
       UncertaintyPlanningState> PolicyGraphNode;
   typedef common_robotics_utilities::simple_graph::Graph<
@@ -65,7 +66,7 @@ public:
     for (size_t idx = 0; idx < planner_tree.size(); idx++)
     {
       const UncertaintyPlanningTreeState& current_tree_state
-          = planner_tree[idx];
+          = planner_tree.at(idx);
       const UncertaintyPlanningState& current_planner_state
           = current_tree_state.GetValueImmutable();
       const int64_t parent_index = current_tree_state.GetParentIndex();
@@ -78,13 +79,11 @@ public:
         policy_graph.AddEdgeBetweenNodes(
             static_cast<int64_t>(idx), parent_index, edge_weight);
       }
-      for (size_t child_index_idx = 0; child_index_idx < child_indices.size();
-           child_index_idx++)
+      for (const int64_t child_index : child_indices)
       {
-        const int64_t child_index = child_indices[child_index_idx];
         const double edge_weight
-            = planner_tree[static_cast<size_t>(child_index)].GetValueImmutable()
-                .GetEffectiveEdgePfeasibility();
+            = planner_tree.at(static_cast<size_t>(child_index))
+                .GetValueImmutable().GetEffectiveEdgePfeasibility();
         policy_graph.AddEdgeBetweenNodes(
             static_cast<int64_t>(idx), child_index, edge_weight);
       }
@@ -141,9 +140,8 @@ public:
       std::vector<common_robotics_utilities::simple_graph::GraphEdge>
           same_action_other_child_edges;
       same_action_other_child_edges.reserve(all_child_edges.size());
-      for (size_t idx = 0; idx < all_child_edges.size(); idx++)
+      for (const auto& other_child_edge : all_child_edges)
       {
-        const auto& other_child_edge = all_child_edges[idx];
         const int64_t child_index = other_child_edge.GetToIndex();
         const PolicyGraphNode& child_node = graph.GetNodeImmutable(child_index);
         const UncertaintyPlanningState& child_node_value
@@ -178,11 +176,8 @@ public:
         }
         // Update the percent of particles that are still usefully active
         double updated_percent_active = 0.0;
-        for (size_t other_idx = 0;
-             other_idx < same_action_other_child_edges.size(); other_idx++)
+        for (const auto& other_child_edge : same_action_other_child_edges)
         {
-          const auto& other_child_edge
-              = same_action_other_child_edges[other_idx];
           const int64_t child_index = other_child_edge.GetToIndex();
           const PolicyGraphNode& child_node
               = graph.GetNodeImmutable(child_index);
@@ -222,16 +217,14 @@ public:
       const uint32_t edge_attempt_threshold)
   {
     PolicyGraph updated_graph = initial_graph;
+    #pragma omp parallel for
     for (size_t idx = 0; idx < updated_graph.GetNodesImmutable().size(); idx++)
     {
       PolicyGraphNode& current_node
           = updated_graph.GetNodeMutable(static_cast<int64_t>(idx));
       // Update all edges going out of the node
-      auto& current_out_edges = current_node.GetOutEdgesMutable();
-      for (size_t out_edge_index = 0; out_edge_index < current_out_edges.size();
-           out_edge_index++)
+      for (auto& current_out_edge : current_node.GetOutEdgesMutable())
       {
-        auto& current_out_edge = current_out_edges[out_edge_index];
         // The current edge weight is the probability of that edge
         const double current_edge_weight = current_out_edge.GetWeight();
         // If the edge has positive probability, we need to consider the
@@ -262,11 +255,8 @@ public:
         }
       }
       // Update all edges going into the node
-      auto& current_in_edges = current_node.GetInEdgesMutable();
-      for (size_t out_edge_index = 0; out_edge_index < current_in_edges.size();
-           out_edge_index++)
+      for (auto& current_in_edge : current_node.GetInEdgesMutable())
       {
-        auto& current_in_edge = current_in_edges[out_edge_index];
         // The current edge weight is the probability of that edge
         const double current_edge_weight = current_in_edge.GetWeight();
         // If the edge has positive probability, we need to consider the
@@ -373,9 +363,15 @@ private:
   // Typedef so we don't hate ourselves
   typedef uncertainty_planning_core::UncertaintyPlannerState<
       Configuration, ConfigSerializer, ConfigAlloc> UncertaintyPlanningState;
+  typedef Eigen::aligned_allocator<UncertaintyPlanningState>
+      UncertaintyPlanningStateAllocator;
+  typedef std::vector<
+      UncertaintyPlanningState, UncertaintyPlanningStateAllocator>
+          UncertaintyPlanningStateVector;
   typedef common_robotics_utilities::simple_rrt_planner::SimpleRRTPlannerState<
       UncertaintyPlanningState> UncertaintyPlanningTreeState;
-  typedef std::vector<UncertaintyPlanningTreeState> UncertaintyPlanningTree;
+  typedef common_robotics_utilities::simple_rrt_planner::PlanningTree<
+      UncertaintyPlanningState> UncertaintyPlanningTree;
   typedef common_robotics_utilities::simple_graph::GraphNode<
       UncertaintyPlanningState> PolicyGraphNode;
   typedef common_robotics_utilities::simple_graph::Graph<
@@ -505,7 +501,7 @@ public:
       const double distance
           = dijkstras_result.GetNodeDistance(static_cast<int64_t>(idx));
       const UncertaintyPlanningTreeState& current_tree_state
-          = planning_tree[idx];
+          = planning_tree.at(idx);
       const int64_t parent_index = current_tree_state.GetParentIndex();
       const UncertaintyPlanningState& current_state
           = current_tree_state.GetValueImmutable();
@@ -600,8 +596,9 @@ public:
           deser_buffer, deser_current, UncertaintyPlanningState::Deserialize);
     };
     const std::pair<UncertaintyPlanningTree, uint64_t> planner_tree_deserialized
-        = DeserializeVectorLike<UncertaintyPlanningTreeState>(
-            buffer, current_position, planning_tree_state_deserializer_fn);
+        = DeserializeVectorLike<
+            UncertaintyPlanningTreeState, UncertaintyPlanningTree>(
+                buffer, current_position, planning_tree_state_deserializer_fn);
     planner_tree_ = planner_tree_deserialized.first;
     current_position += planner_tree_deserialized.second;
     // Deserialize the goal
@@ -657,23 +654,23 @@ public:
     state_string_rep.push_back("  <value>");
     const std::vector<std::string> value_string_rep
         = state_print_fn(policy_tree_state.GetValueImmutable());
-    for (size_t ldx = 0; ldx < value_string_rep.size(); ldx++)
+    for (const auto& value_string : value_string_rep)
     {
-        state_string_rep.push_back("    " + value_string_rep[ldx]);
+      state_string_rep.push_back("    " + value_string);
     }
     state_string_rep.push_back("  </value>");
     state_string_rep.push_back("  <children>");
     const std::vector<int64_t>& child_indices
         = policy_tree_state.GetChildIndices();
-    for (size_t cdx = 0; cdx < child_indices.size(); cdx++)
+
+    for (const int64_t child_index : child_indices)
     {
-        const int64_t child_index = child_indices[cdx];
-        const std::vector<std::string> child_string_rep
-            = PrintHumanReadablePolicyTreeNode(child_index, state_print_fn);
-        for (size_t ldx = 0; ldx < child_string_rep.size(); ldx++)
-        {
-            state_string_rep.push_back("    " + child_string_rep[ldx]);
-        }
+      const std::vector<std::string> child_string_rep
+          = PrintHumanReadablePolicyTreeNode(child_index, state_print_fn);
+      for (const auto& child_string : child_string_rep)
+      {
+        state_string_rep.push_back("    " + child_string);
+      }
     }
     state_string_rep.push_back("  </children>");
     state_string_rep.push_back("</state>");
@@ -943,19 +940,18 @@ private:
                 ::GetContextOmpThreadNum();
         const double expected_cost_to_goal
             = policy_dijkstras_result_.GetNodeDistance(node_idx);
-        if (expected_cost_to_goal < per_thread_best_node[thread_id].second)
+        if (expected_cost_to_goal < per_thread_best_node.at(thread_id).second)
         {
-            per_thread_best_node[thread_id].first = node_idx;
-            per_thread_best_node[thread_id].second = expected_cost_to_goal;
+          per_thread_best_node.at(thread_id).first = node_idx;
+          per_thread_best_node.at(thread_id).second = expected_cost_to_goal;
         }
       }
     }
     int64_t best_node_index = -1;
     double best_node_expected_cost_to_goal
         = std::numeric_limits<double>::infinity();
-    for (size_t idx = 0; idx < per_thread_best_node.size(); idx++)
+    for (const auto& thread_best : per_thread_best_node)
     {
-      const std::pair<int64_t, double>& thread_best = per_thread_best_node[idx];
       if (thread_best.second < best_node_expected_cost_to_goal)
       {
         best_node_index = thread_best.first;
@@ -1003,6 +999,8 @@ private:
     }
     // Collect the possible states that could have resulted from the transition
     // we just performed
+    // TODO(calderpg) Can std::map be replaced here to allow this loop to be
+    // parallelized?
     std::map<int64_t, std::vector<std::pair<int64_t, bool>>>
         expected_possibility_result_states;
     std::map<int64_t, uint64_t> previous_state_index_possibilities;
@@ -1072,7 +1070,7 @@ private:
           "previous_state_index_possibilities cannot be empty");
     }
     const std::vector<std::pair<int64_t, bool>>& expected_possible_result_states
-        = expected_possibility_result_states[previous_state_index];
+        = expected_possibility_result_states.at(previous_state_index);
     if (expected_possible_result_states.empty())
     {
       throw std::runtime_error(
@@ -1085,10 +1083,8 @@ private:
     // Check if the current config matches one or more of the expected result
     // states
     std::vector<std::pair<int64_t, bool>> expected_result_state_matches;
-    for (size_t idx = 0; idx < expected_possible_result_states.size(); idx++)
+    for (const auto& possible_match : expected_possible_result_states)
     {
-      const std::pair<int64_t, bool>& possible_match
-          = expected_possible_result_states[idx];
       const int64_t possible_match_state_idx
           = (possible_match.second)
             ? planner_tree_.at(static_cast<size_t>(possible_match.first))
@@ -1138,10 +1134,9 @@ private:
       std::vector<std::pair<int64_t, bool>>
           expected_possible_result_child_states;
       // Get all 1st-tier child states of the expected result states
-      for (size_t idx = 0; idx < expected_possible_result_states.size(); idx++)
+
+      for (const auto& possible_match : expected_possible_result_states)
       {
-        const std::pair<int64_t, bool>& possible_match
-            = expected_possible_result_states[idx];
         const int64_t possible_match_state_idx
             = (possible_match.second)
               ? planner_tree_.at(static_cast<size_t>(possible_match.first))
@@ -1149,11 +1144,9 @@ private:
               : possible_match.first;
         const UncertaintyPlanningTreeState& possible_match_tree_state
             = planner_tree_.at(static_cast<size_t>(possible_match_state_idx));
-        const std::vector<int64_t>& child_state_indices
-            = possible_match_tree_state.GetChildIndices();
-        for (size_t cdx = 0; cdx < child_state_indices.size(); cdx++)
+        for (const int64_t child_state_index
+                : possible_match_tree_state.GetChildIndices())
         {
-          const int64_t child_state_index = child_state_indices[cdx];
           expected_possible_result_child_states.push_back(
               std::make_pair(child_state_index, false));
         }
@@ -1164,11 +1157,8 @@ private:
       // Check if the current config matches one or more of the expected result
       // states
       std::vector<std::pair<int64_t, bool>> expected_result_child_state_matches;
-      for (size_t idx = 0; idx < expected_possible_result_child_states.size();
-           idx++)
+      for (const auto& possible_match : expected_possible_result_child_states)
       {
-        const std::pair<int64_t, bool>& possible_match
-            = expected_possible_result_child_states[idx];
         const int64_t possible_match_state_idx
             = (possible_match.second)
               ? planner_tree_.at(static_cast<size_t>(possible_match.first))
@@ -1206,11 +1196,9 @@ private:
         // Select the current best-distance result state as THE result state
         std::pair<int64_t, bool> best_result_state(-1, false);
         double best_distance = std::numeric_limits<double>::infinity();
-        for (size_t idx = 0; idx < expected_result_child_state_matches.size();
-             idx++)
+
+        for (const auto& result_match : expected_result_child_state_matches)
         {
-          const std::pair<int64_t, bool>& result_match
-              = expected_result_child_state_matches[idx];
           const int64_t result_match_state_idx
               = (result_match.second)
                 ? planner_tree_.at(static_cast<size_t>(result_match.first))
@@ -1503,11 +1491,10 @@ private:
       //////////////////////////////////////////////////////////////////////////
       // Select the current best-distance result state as THE result state
       std::pair<int64_t, bool> best_result_state(-1, false);
-      double best_distance = INFINITY;
-      for (size_t idx = 0; idx < expected_result_state_matches.size(); idx++)
+      double best_distance = std::numeric_limits<double>::infinity();
+
+      for (const auto& result_match : expected_result_state_matches)
       {
-        const std::pair<int64_t, bool>& result_match
-            = expected_result_state_matches[idx];
         const int64_t result_match_state_idx
             = (result_match.second)
               ? planner_tree_.at(static_cast<size_t>(result_match.first))
@@ -1542,10 +1529,8 @@ private:
       }
       //////////////////////////////////////////////////////////////////////////
       // Update the attempt/reached counts for all *POSSIBLE* result states
-      for (size_t idx = 0; idx < expected_possible_result_states.size(); idx++)
+      for (const auto& possible_result_match : expected_possible_result_states)
       {
-        const std::pair<int64_t, bool>& possible_result_match
-            = expected_possible_result_states[idx];
         UncertaintyPlanningTreeState& possible_result_tree_state
             = planner_tree_.at(static_cast<size_t>(
                 possible_result_match.first));
@@ -1626,11 +1611,14 @@ private:
       UpdateStateGoalReachedProbability(idx);
     }
     // Forward pass through the tree to update P(->goal) for leaf nodes
-    for (size_t idx = 1; idx < planner_tree_.size(); idx++)
+    for (auto& current_state : planner_tree_)
     {
-      // Get the current state
-      UncertaintyPlanningTreeState& current_state = planner_tree_[idx];
       const int64_t parent_index = current_state.GetParentIndex();
+      // This is only true for the root of the tree
+      if (parent_index < 0)
+      {
+        continue;
+      }
       // Get the parent state
       const UncertaintyPlanningTreeState& parent_state
           = planner_tree_.at(static_cast<size_t>(parent_index));
@@ -1666,9 +1654,8 @@ private:
         = current_tree_state.GetChildIndices();
     // Split them by transition IDs
     std::map<uint64_t, std::vector<int64_t>> transition_children_map;
-    for (size_t idx = 0; idx < child_state_indices.size(); idx++)
+    for (const int64_t child_state_index : child_state_indices)
     {
-      const int64_t child_state_index = child_state_indices[idx];
       const UncertaintyPlanningTreeState& child_tree_state
           = planner_tree_.at(static_cast<size_t>(child_state_index));
       const UncertaintyPlanningState& child_state
@@ -1686,9 +1673,8 @@ private:
       UpdateEstimatedEffectiveProbabilities(transition_child_indices);
     }
     // Perform the same update on all of our children
-    for (size_t idx = 0; idx < child_state_indices.size(); idx++)
+    for (const int64_t child_state_index : child_state_indices)
     {
-      const int64_t child_state_index = child_state_indices[idx];
       UpdateChildTransitionProbabilities(child_state_index);
     }
   }
@@ -1700,7 +1686,7 @@ private:
     // their effective edge P(feasibility)
     for (size_t idx = 0; idx < transition_child_states.size(); idx++)
     {
-      const int64_t current_state_index = transition_child_states[idx];
+      const int64_t current_state_index = transition_child_states.at(idx);
       UncertaintyPlanningTreeState& current_tree_state
           = planner_tree_.at(static_cast<size_t>(current_state_index));
       UncertaintyPlanningState& current_state
@@ -1720,7 +1706,7 @@ private:
           if (other_idx != idx)
           {
             const int64_t other_state_index
-                = transition_child_states[other_idx];
+                = transition_child_states.at(other_idx);
             const UncertaintyPlanningTreeState& other_tree_state
                 = planner_tree_.at(static_cast<size_t>(other_state_index));
             const UncertaintyPlanningState& other_state
@@ -1780,11 +1766,9 @@ private:
     // First, we go through the children and separate them based on transition
     // id (this puts all the children of a split together in one place)
     std::map<uint64_t, std::vector<int64_t>> effective_child_branches;
-    for (size_t idx = 0; idx < current_tree_state.GetChildIndices().size();
-         idx++)
+    for (const int64_t current_child_index
+            : current_tree_state.GetChildIndices())
     {
-      const int64_t& current_child_index
-          = current_tree_state.GetChildIndices()[idx];
       const uint64_t& child_transition_id
           = planner_tree_.at(static_cast<size_t>(current_child_index))
               .GetValueImmutable().GetTransitionId();
@@ -1836,17 +1820,16 @@ private:
       const std::vector<int64_t>& child_node_indices,
       const uint32_t edge_attempt_threshold) const
   {
-    std::vector<UncertaintyPlanningState> child_states(
+    UncertaintyPlanningStateVector child_states(
         child_node_indices.size());
     for (size_t idx = 0; idx < child_node_indices.size(); idx++)
     {
       // Get the current child
-      const int64_t& current_child_index
-          = child_node_indices[idx];
+      const int64_t& current_child_index = child_node_indices.at(idx);
       const UncertaintyPlanningState& current_child
           = planner_tree_.at(static_cast<size_t>(current_child_index))
               .GetValueImmutable();
-      child_states[idx] = current_child;
+      child_states.at(idx) = current_child;
     }
     return ComputeTransitionGoalProbability(
         child_states, edge_attempt_threshold, logging_fn_);
@@ -1855,7 +1838,7 @@ private:
 public:
 
   static double ComputeTransitionGoalProbability(
-      const std::vector<UncertaintyPlanningState>& child_nodes,
+      const UncertaintyPlanningStateVector& child_nodes,
       const uint32_t planner_action_try_attempts,
       const std::function<void(const std::string&, const int32_t)>& logging_fn)
   {

@@ -368,18 +368,18 @@ private:
     }
   }
 
-  std::vector<std::vector<size_t>> ClusterParticlesImpl(
+  std::vector<std::vector<int64_t>> ClusterParticlesImpl(
       const std::vector<SimulationResult<State>>& particles)
   {
-    std::map<uint64_t, std::vector<size_t>> cluster_map;
+    std::map<uint64_t, std::vector<int64_t>> cluster_map;
     for (size_t idx = 0; idx < particles.size(); idx++)
     {
       const State& config = particles.at(idx).ResultConfig();
       const uint64_t particle_readiness
           = ComputeStateReadiness(config);
-      cluster_map[particle_readiness].push_back(idx);
+      cluster_map[particle_readiness].push_back(static_cast<int64_t>(idx));
     }
-    std::vector<std::vector<size_t>> clusters;
+    std::vector<std::vector<int64_t>> clusters;
     for (auto itr = cluster_map.begin(); itr != cluster_map.end(); ++itr)
     {
       clusters.push_back(itr->second);
@@ -741,7 +741,7 @@ private:
       return std::vector<std::vector<SimulationResult<State>>>{
                 particles};
     }
-    const std::vector<std::vector<size_t>> index_clusters
+    const std::vector<std::vector<int64_t>> index_clusters
         = ClusterParticlesImpl(particles);
     // Before we return, we need to convert the index clusters to State clusters
     std::vector<std::vector<SimulationResult<State>>> clusters;
@@ -754,14 +754,14 @@ private:
          cluster_idx < index_clusters.size();
          cluster_idx++)
     {
-      const std::vector<size_t>& cluster = index_clusters.at(cluster_idx);
+      const std::vector<int64_t>& cluster = index_clusters.at(cluster_idx);
       std::vector<SimulationResult<State>> final_cluster;
       final_cluster.reserve(cluster.size());
-      for (size_t element_idx = 0; element_idx < cluster.size(); element_idx++)
+      for (const int64_t particle_idx : cluster)
       {
         total_particles++;
-        const size_t particle_idx = cluster.at(element_idx);
-        const SimulationResult<State>& particle = particles.at(particle_idx);
+        const SimulationResult<State>& particle =
+            particles.at(static_cast<size_t>(particle_idx));
         final_cluster.push_back(particle);
       }
       final_cluster.shrink_to_fit();
@@ -1453,7 +1453,7 @@ public:
     split_id_ = 0;
   }
 
-  virtual std::vector<std::vector<size_t>> ClusterParticles(
+  virtual std::vector<std::vector<int64_t>> ClusterParticles(
     const TaskStateRobotBasePtr& robot,
     const std::vector<SimulationResult<State>>& particles,
     const DisplayFn& display_fn)

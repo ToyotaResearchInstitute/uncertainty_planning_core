@@ -41,9 +41,11 @@ namespace uncertainty_planning_core
         // Typedef so we don't hate ourselves
         typedef common_robotics_utilities::simple_robot_model_interface::SimpleRobotModelInterface<Configuration, ConfigAlloc> Robot;
         typedef UncertaintyPlannerState<Configuration, ConfigSerializer, ConfigAlloc> UncertaintyPlanningState;
+        typedef Eigen::aligned_allocator<UncertaintyPlanningState> UncertaintyPlanningStateAllocator;
+        typedef std::vector<UncertaintyPlanningState, UncertaintyPlanningStateAllocator> UncertaintyPlanningStateVector;
         typedef ExecutionPolicy<Configuration, ConfigSerializer, ConfigAlloc> UncertaintyPlanningPolicy;
         typedef common_robotics_utilities::simple_rrt_planner::SimpleRRTPlannerState<UncertaintyPlanningState> UncertaintyPlanningTreeState;
-        typedef std::vector<UncertaintyPlanningTreeState> UncertaintyPlanningTree;
+        typedef common_robotics_utilities::simple_rrt_planner::PlanningTree<UncertaintyPlanningState> UncertaintyPlanningTree;
         typedef std::shared_ptr<UncertaintyPlanningTree> UncertaintyPlanningTreePtr;
         typedef common_robotics_utilities::simple_graph::Graph<UncertaintyPlanningState> ExecutionPolicyGraph;
 
@@ -377,7 +379,7 @@ namespace uncertainty_planning_core
             clustering_ptr_->ResetStatistics();
             InitializePlanningTreeIfNotReady();
             GetPlanningTreeMutable().emplace_back(UncertaintyPlanningTreeState(start_state));
-            auto planning_results = common_robotics_utilities::simple_rrt_planner::RRTPlanMultiPath(GetPlanningTreeMutable(), complete_sampling_fn, nearest_neighbor_fn, forward_propagation_fn, {}, goal_reached_fn, goal_reached_callback, termination_check_fn);
+            auto planning_results = common_robotics_utilities::simple_rrt_planner::RRTPlanMultiPath<UncertaintyPlanningState, UncertaintyPlanningState, UncertaintyPlanningStateAllocator>(GetPlanningTreeMutable(), complete_sampling_fn, nearest_neighbor_fn, forward_propagation_fn, {}, goal_reached_fn, goal_reached_callback, termination_check_fn);
             // It "shouldn't" matter what the goal state actually is, since it's more of a virtual node to tie the policy graph together
             // But it probably needs to be collision-free
             auto valid_goal_sampling_fn = [&] ()
@@ -557,13 +559,13 @@ namespace uncertainty_planning_core
             clustering_ptr_->ResetStatistics();
             InitializePlanningTreeIfNotReady();
             GetPlanningTreeMutable().emplace_back(UncertaintyPlanningTreeState(start_state));
-            auto planning_results = common_robotics_utilities::simple_rrt_planner::RRTPlanMultiPath(GetPlanningTreeMutable(), complete_sampling_fn, nearest_neighbor_fn, forward_propagation_fn, {}, goal_reached_fn, goal_reached_callback, termination_check_fn);
+            auto planning_results = common_robotics_utilities::simple_rrt_planner::RRTPlanMultiPath<UncertaintyPlanningState, UncertaintyPlanningState, UncertaintyPlanningStateAllocator>(GetPlanningTreeMutable(), complete_sampling_fn, nearest_neighbor_fn, forward_propagation_fn, {}, goal_reached_fn, goal_reached_callback, termination_check_fn);
             return ProcessPlanningResults(planning_results, goal, edge_attempt_count, policy_action_attempt_count, include_spur_actions, policy_marker_size, display_fn);
         }
 
     protected:
 
-        inline std::pair<UncertaintyPlanningPolicy, std::map<std::string, double>> ProcessPlanningResults(const std::pair<std::vector<std::vector<UncertaintyPlanningState>>, std::map<std::string, double>>& planning_results,
+        inline std::pair<UncertaintyPlanningPolicy, std::map<std::string, double>> ProcessPlanningResults(const std::pair<std::vector<UncertaintyPlanningStateVector>, std::map<std::string, double>>& planning_results,
                                                                                                           const Configuration& virtual_goal_config,
                                                                                                           const uint32_t edge_attempt_count,
                                                                                                           const uint32_t policy_action_attempt_count,
@@ -591,7 +593,6 @@ namespace uncertainty_planning_core
             {
                 const UncertaintyPlanningTree postprocessed_tree = PostProcessTree(GetPlanningTreeImmutable());
                 const UncertaintyPlanningTree pruned_tree = PruneTree(postprocessed_tree, include_spur_actions);
-                // Not sure hwat to do here with goal states
                 const UncertaintyPlanningPolicy policy = ExtractPolicy(pruned_tree, virtual_goal_config, edge_attempt_count, policy_action_attempt_count);
                 planning_statistics["Extracted policy size"] = (double)policy.GetRawPolicy().GetNodesImmutable().size();
                 if (debug_level_ >= 2)
@@ -602,7 +603,7 @@ namespace uncertainty_planning_core
                 // Draw the final path(s)
                 for (size_t pidx = 0; pidx < planning_results.first.size(); pidx++)
                 {
-                    const std::vector<UncertaintyPlanningState>& planned_path = planning_results.first[pidx];
+                    const UncertaintyPlanningStateVector& planned_path = planning_results.first[pidx];
                     if (planned_path.size() >= 2)
                     {
                         double goal_reached_probability = planned_path[planned_path.size() - 1].GetGoalPfeasibility() * planned_path[planned_path.size() - 1].GetMotionPfeasibility();
@@ -1425,21 +1426,21 @@ namespace uncertainty_planning_core
                 return std::vector<std::vector<SimulationResult<Configuration>>>{particles};
             }
             const std::chrono::time_point<std::chrono::steady_clock> start = (std::chrono::time_point<std::chrono::steady_clock>)std::chrono::steady_clock::now();
-            const std::vector<std::vector<size_t>> final_index_clusters = clustering_ptr_->ClusterParticles(robot_ptr_, particles, display_fn);
+            const std::vector<std::vector<int64_t>> final_index_clusters = clustering_ptr_->ClusterParticles(robot_ptr_, particles, display_fn);
             // Before we return, we need to convert the index clusters to configuration clusters
             std::vector<std::vector<SimulationResult<Configuration>>> final_clusters;
             final_clusters.reserve(final_index_clusters.size());
             size_t total_particles = 0;
             for (size_t cluster_idx = 0; cluster_idx < final_index_clusters.size(); cluster_idx++)
             {
-                const std::vector<size_t>& cluster = final_index_clusters[cluster_idx];
+                const std::vector<int64_t>& cluster = final_index_clusters[cluster_idx];
                 std::vector<SimulationResult<Configuration>> final_cluster;
                 final_cluster.reserve(cluster.size());
                 for (size_t element_idx = 0; element_idx < cluster.size(); element_idx++)
                 {
                     total_particles++;
-                    const size_t particle_idx = cluster[element_idx];
-                    const SimulationResult<Configuration>& particle = particles.at(particle_idx);
+                    const int64_t particle_idx = cluster[element_idx];
+                    const SimulationResult<Configuration>& particle = particles.at(static_cast<size_t>(particle_idx));
                     if ((particle.DidContact() == false) || allow_contacts)
                     {
                         final_cluster.push_back(particle);
@@ -2105,7 +2106,7 @@ namespace uncertainty_planning_core
 
         inline double ComputeTransitionGoalProbability(const std::vector<int64_t>& child_node_indices, const uint32_t planner_action_try_attempts) const
         {
-            std::vector<UncertaintyPlanningState> child_states(child_node_indices.size());
+            UncertaintyPlanningStateVector child_states(child_node_indices.size());
             for (size_t idx = 0; idx < child_node_indices.size(); idx++)
             {
                 // Get the current child
