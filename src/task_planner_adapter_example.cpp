@@ -3,7 +3,6 @@
 
 class PutInBoxState
 {
-
 private:
 
   int32_t objects_available_;
@@ -140,36 +139,37 @@ public:
     return bytes_written;
   }
 
-  static std::pair<PutInBoxState, uint64_t>
-  Deserialize(const std::vector<uint8_t>& buffer, const uint64_t current)
+  static common_robotics_utilities::serialization::Deserialized<PutInBoxState>
+  Deserialize(
+      const std::vector<uint8_t>& buffer, const uint64_t starting_offset)
   {
     using common_robotics_utilities::serialization::DeserializeMemcpyable;
-    uint64_t current_position = current;
-    auto deser_objects_available
-        = DeserializeMemcpyable<int32_t>(buffer, current);
-    const int32_t objects_available = deser_objects_available.first;
-    current_position += deser_objects_available.second;
-    auto deser_object_put_away
-        = DeserializeMemcpyable<uint8_t>(buffer, current);
-    const bool object_put_away = static_cast<bool>(deser_object_put_away.first);
-    current_position += deser_object_put_away.second;
-    auto deser_box_open
-        = DeserializeMemcpyable<uint8_t>(buffer, current);
-    const bool box_open = static_cast<bool>(deser_box_open.first);
-    current_position += deser_box_open.second;
+    uint64_t current_position = starting_offset;
+    const auto deser_objects_available
+        = DeserializeMemcpyable<int32_t>(buffer, current_position);
+    const int32_t objects_available = deser_objects_available.Value();
+    current_position += deser_objects_available.BytesRead();
+    const auto deser_object_put_away
+        = DeserializeMemcpyable<uint8_t>(buffer, current_position);
+    const bool object_put_away
+        = static_cast<bool>(deser_object_put_away.Value());
+    current_position += deser_object_put_away.BytesRead();
+    const auto deser_box_open
+        = DeserializeMemcpyable<uint8_t>(buffer, current_position);
+    const bool box_open = static_cast<bool>(deser_box_open.Value());
+    current_position += deser_box_open.BytesRead();
     // How much did we read?
-    const uint64_t bytes_read = current_position - current;
-    return std::make_pair(PutInBoxState(objects_available,
-                                        object_put_away,
-                                        box_open),
-                          bytes_read);
+    const uint64_t bytes_read = current_position - starting_offset;
+    return common_robotics_utilities::serialization::MakeDeserialized(
+        PutInBoxState(objects_available, object_put_away, box_open),
+        bytes_read);
   }
 };
 
 std::ostream& operator<<(std::ostream& strm, const PutInBoxState& state)
 {
-    strm << state.Print();
-    return strm;
+  strm << state.Print();
+  return strm;
 }
 
 class OpenBoxPrimitive
@@ -455,31 +455,31 @@ int main(int argc, char** argv)
   ros::Publisher display_debug_publisher =
       nh.advertise<visualization_msgs::MarkerArray>(
         "task_planner_debug_display_markers", 1, true);
-  std::function<void(const visualization_msgs::MarkerArray&)> display_fn
+  const uncertainty_planning_core::DisplayFunction display_fn
       = [&] (const visualization_msgs::MarkerArray& markers)
   {
     display_debug_publisher.publish(markers);
   };
   // Make logging function
-  std::function<void(const std::string&, const int32_t)> logging_fn
+  const uncertainty_planning_core::LoggingFunction logging_fn
       = [&] (const std::string& msg, const int32_t level)
   {
     ROS_INFO_NAMED(ros::this_node::getName(), "[%d] %s", level, msg.c_str());
   };
   // Get seed for PRNG
   int32_t prng_seed_init
-      = (int32_t)nhp.param(std::string("prng_seed_init"), -1);
+      = static_cast<int32_t>(nhp.param(std::string("prng_seed_init"), -1));
   if (prng_seed_init == -1)
   {
-    prng_seed_init = (int32_t)std::chrono::steady_clock::now()
-                     .time_since_epoch().count();
+    prng_seed_init = static_cast<int32_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count());
     logging_fn("No PRNG seed provided, initializing from clock to ["
                + std::to_string(prng_seed_init) + "]", 1);
   }
   const int64_t prng_seed
       = static_cast<int64_t>(
           common_robotics_utilities::simple_prngs
-              ::SplitMix64PRNG((uint64_t)prng_seed_init)());
+              ::SplitMix64PRNG(static_cast<uint64_t>(prng_seed_init))());
   // Make the planner interface
   const std::function<uint64_t(const PutInBoxState&)> state_readiness_fn
       = [] (const PutInBoxState& state)
@@ -522,12 +522,14 @@ int main(int argc, char** argv)
   planner.RegisterPrimitive(check_if_available_primitive_ptr);
   planner.RegisterPrimitive(put_object_in_box_primitive_ptr);
   // Plan
-  auto plan_result
+  const auto plan_result
       = planner.PlanPolicy(PutInBoxState(), 10.0, 1.0, 0.01, 50u, 50u);
-  logging_fn("Task planning statistics: "
-             + common_robotics_utilities::print::Print(plan_result.second), 1);
-  logging_fn("Planned policy:\n"
-             + common_robotics_utilities::print::Print(plan_result.first), 1);
+  logging_fn(
+      "Task planning statistics: "
+      + common_robotics_utilities::print::Print(plan_result.Statistics()), 1);
+  logging_fn(
+      "Planned policy:\n"
+      + common_robotics_utilities::print::Print(plan_result.Policy()), 1);
   int32_t objects_to_put_away = 5;
   const std::function<PutInBoxState(void)> single_execution_initialization_fn
       = [&] (void)
@@ -543,12 +545,14 @@ int main(int argc, char** argv)
       post_outcome_callback_fn
           = [] (const std::vector<PutInBoxState>&, const int64_t) {};
   auto exec_result
-      = planner.ExecutePolicy(plan_result.first,
+      = planner.ExecutePolicy(plan_result.Policy(),
                               single_execution_initialization_fn,
                               pre_action_callback_fn,
                               post_outcome_callback_fn,
                               100u, 100u, true, false);
-  logging_fn("Task execution statistics: "
-             + common_robotics_utilities::print::Print(exec_result.second), 1);
+  logging_fn(
+      "Task execution statistics: "
+      + common_robotics_utilities::print::Print(
+          exec_result.ExecutionStatistics()), 1);
   return 0;
 }

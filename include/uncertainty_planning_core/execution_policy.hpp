@@ -11,29 +11,41 @@
 #include <queue>
 #include <common_robotics_utilities/openmp_helpers.hpp>
 #include <common_robotics_utilities/print.hpp>
+#include <common_robotics_utilities/serialization.hpp>
 #include <common_robotics_utilities/simple_rrt_planner.hpp>
 #include <common_robotics_utilities/simple_graph.hpp>
 #include <common_robotics_utilities/simple_graph_search.hpp>
+#include <common_robotics_utilities/simple_knearest_neighbors.hpp>
 #include <uncertainty_planning_core/uncertainty_planner_state.hpp>
+#include <visualization_msgs/MarkerArray.h>
 
 namespace uncertainty_planning_core
 {
+using DisplayFunction
+    = std::function<void(const visualization_msgs::MarkerArray&)>;
+using LoggingFunction
+    = std::function<void(const std::string&, const int32_t)>;
+
 template<typename Configuration, typename ConfigSerializer,
          typename ConfigAlloc=std::allocator<Configuration>>
 class PolicyGraphBuilder
 {
 private:
   // Typedef so we don't hate ourselves
-  typedef uncertainty_planning_core::UncertaintyPlannerState<
-      Configuration, ConfigSerializer, ConfigAlloc> UncertaintyPlanningState;
-  typedef common_robotics_utilities::simple_rrt_planner::SimpleRRTPlannerState<
-      UncertaintyPlanningState> UncertaintyPlanningTreeState;
-  typedef common_robotics_utilities::simple_rrt_planner::PlanningTree<
-      UncertaintyPlanningState> UncertaintyPlanningTree;
-  typedef common_robotics_utilities::simple_graph::GraphNode<
-      UncertaintyPlanningState> PolicyGraphNode;
-  typedef common_robotics_utilities::simple_graph::Graph<
-      UncertaintyPlanningState> PolicyGraph;
+  using UncertaintyPlanningState
+      = UncertaintyPlannerState<Configuration, ConfigSerializer, ConfigAlloc>;
+  using UncertaintyPlanningTreeState
+      = common_robotics_utilities::simple_rrt_planner::SimpleRRTPlannerState<
+          UncertaintyPlanningState>;
+  using UncertaintyPlanningTree
+      = common_robotics_utilities::simple_rrt_planner::PlanningTree<
+          UncertaintyPlanningState>;
+  using PolicyGraphNode
+      = common_robotics_utilities::simple_graph::GraphNode<
+          UncertaintyPlanningState>;
+  using PolicyGraph
+      = common_robotics_utilities::simple_graph::Graph<
+          UncertaintyPlanningState>;
 
   PolicyGraphBuilder() {}
 
@@ -240,7 +252,8 @@ public:
                 ? 1.0 / current_edge_weight
                 : std::numeric_limits<double>::infinity();
           const double edge_attempt_weight
-              = marginal_edge_weight * (double)estimated_attempt_count;
+              = marginal_edge_weight
+                  * static_cast<double>(estimated_attempt_count);
           const double new_edge_weight
               = edge_probability_weight * edge_attempt_weight;
           current_out_edge.SetWeight(new_edge_weight);
@@ -272,7 +285,8 @@ public:
                 ? 1.0 / current_edge_weight
                 : std::numeric_limits<double>::infinity();
           const double edge_attempt_weight
-              = marginal_edge_weight * (double)estimated_attempt_count;
+              = marginal_edge_weight
+                  * static_cast<double>(estimated_attempt_count);
           const double new_edge_weight
               = edge_probability_weight * edge_attempt_weight;
           current_in_edge.SetWeight(new_edge_weight);
@@ -361,23 +375,29 @@ class ExecutionPolicy
 {
 private:
   // Typedef so we don't hate ourselves
-  typedef uncertainty_planning_core::UncertaintyPlannerState<
-      Configuration, ConfigSerializer, ConfigAlloc> UncertaintyPlanningState;
-  typedef Eigen::aligned_allocator<UncertaintyPlanningState>
-      UncertaintyPlanningStateAllocator;
-  typedef std::vector<
-      UncertaintyPlanningState, UncertaintyPlanningStateAllocator>
-          UncertaintyPlanningStateVector;
-  typedef common_robotics_utilities::simple_rrt_planner::SimpleRRTPlannerState<
-      UncertaintyPlanningState> UncertaintyPlanningTreeState;
-  typedef common_robotics_utilities::simple_rrt_planner::PlanningTree<
-      UncertaintyPlanningState> UncertaintyPlanningTree;
-  typedef common_robotics_utilities::simple_graph::GraphNode<
-      UncertaintyPlanningState> PolicyGraphNode;
-  typedef common_robotics_utilities::simple_graph::Graph<
-      UncertaintyPlanningState> PolicyGraph;
-  typedef PolicyGraphBuilder<Configuration, ConfigSerializer, ConfigAlloc>
-      ExecutionPolicyGraphBuilder;
+  using UncertaintyPlanningState
+      = UncertaintyPlannerState<Configuration, ConfigSerializer, ConfigAlloc>;
+  using UncertaintyPlanningStateAllocator
+      = Eigen::aligned_allocator<UncertaintyPlanningState>;
+  using UncertaintyPlanningStateVector
+      = std::vector<UncertaintyPlanningState,
+                    UncertaintyPlanningStateAllocator>;
+  using UncertaintyPlanningTreeState
+      = common_robotics_utilities::simple_rrt_planner::SimpleRRTPlannerState<
+          UncertaintyPlanningState>;
+  using UncertaintyPlanningTree
+      = common_robotics_utilities::simple_rrt_planner::PlanningTree<
+          UncertaintyPlanningState>;
+  using PolicyGraphNode
+      = common_robotics_utilities::simple_graph::GraphNode<
+          UncertaintyPlanningState>;
+  using PolicyGraph
+      = common_robotics_utilities::simple_graph::Graph<
+          UncertaintyPlanningState>;
+  using ExecutionPolicyGraphBuilder
+      = PolicyGraphBuilder<Configuration, ConfigSerializer, ConfigAlloc>;
+  using ExecutionPolicyType
+      = ExecutionPolicy<Configuration, ConfigSerializer, ConfigAlloc>;
 
   bool initialized_ = false;
   // Raw data used to rebuild the policy graph
@@ -392,7 +412,7 @@ private:
   common_robotics_utilities::simple_graph_search::DijkstrasResult
       policy_dijkstras_result_;
   // Logging function
-  std::function<void(const std::string&, const int32_t)> logging_fn_;
+  LoggingFunction logging_fn_;
 
 public:
   static uint32_t AddWithOverflowClamp(
@@ -415,21 +435,19 @@ public:
   }
 
   static uint64_t Serialize(
-      const ExecutionPolicy<Configuration, ConfigSerializer, ConfigAlloc>&
-          policy,
-      std::vector<uint8_t>& buffer)
+      const ExecutionPolicyType& policy, std::vector<uint8_t>& buffer)
   {
     return policy.SerializeSelf(buffer);
   }
 
-  static std::pair<ExecutionPolicy<
-                       Configuration, ConfigSerializer, ConfigAlloc>,
-                   uint64_t> Deserialize(
-      const std::vector<uint8_t>& buffer, const uint64_t current)
+  static common_robotics_utilities::serialization
+      ::Deserialized<ExecutionPolicyType> Deserialize(
+          const std::vector<uint8_t>& buffer, const uint64_t current)
   {
-    ExecutionPolicy<Configuration, ConfigSerializer, ConfigAlloc> temp_policy;
+    ExecutionPolicyType temp_policy;
     const uint64_t bytes_read = temp_policy.DeserializeSelf(buffer, current);
-    return std::make_pair(temp_policy, bytes_read);
+    return common_robotics_utilities::serialization::MakeDeserialized(
+        temp_policy, bytes_read);
   }
 
   ExecutionPolicy(
@@ -438,7 +456,7 @@ public:
       const double conformant_planning_threshold,
       const uint32_t edge_attempt_threshold,
       const uint32_t policy_action_attempt_count,
-      const std::function<void(const std::string&, const int32_t)>& logging_fn)
+      const LoggingFunction& logging_fn)
       : initialized_(true), planner_tree_(planner_tree), goal_(goal),
         marginal_edge_weight_(marginal_edge_weight),
         conformant_planning_threshold_(conformant_planning_threshold),
@@ -454,8 +472,7 @@ public:
       logging_fn_([] (const std::string& msg, const int32_t level)
           { std::cout << "Log [" << level << "] : " << msg << std::endl; }) {}
 
-  void RegisterLoggingFunction(
-      const std::function<void(const std::string&, const int32_t)>& logging_fn)
+  void RegisterLoggingFunction(const LoggingFunction& logging_fn)
   {
     logging_fn_ = logging_fn;
   }
@@ -541,17 +558,17 @@ public:
 
   uint64_t SerializeSelf(std::vector<uint8_t>& buffer) const
   {
+    using common_robotics_utilities::serialization::Serializer;
     using common_robotics_utilities::serialization::SerializeMemcpyable;
     using common_robotics_utilities::serialization::SerializeVectorLike;
     const uint64_t start_buffer_size = buffer.size();
     // Serialize the initialized
     SerializeMemcpyable<uint8_t>(static_cast<uint8_t>(initialized_), buffer);
     // Serialize the planner tree
-    std::function<uint64_t(
-        const UncertaintyPlanningTreeState&, std::vector<uint8_t>&)>
-            planning_tree_state_serializer_fn
-        = [] (const UncertaintyPlanningTreeState& state,
-              std::vector<uint8_t>& ser_buffer)
+    const Serializer<UncertaintyPlanningTreeState>
+        planning_tree_state_serializer_fn
+            = [] (const UncertaintyPlanningTreeState& state,
+                  std::vector<uint8_t>& ser_buffer)
     {
       return UncertaintyPlanningTreeState::Serialize(
           state, ser_buffer, UncertaintyPlanningState::Serialize);
@@ -577,57 +594,57 @@ public:
   uint64_t DeserializeSelf(
       const std::vector<uint8_t>& buffer, const uint64_t starting_offset)
   {
+    using common_robotics_utilities::serialization::Deserializer;
     using common_robotics_utilities::serialization::DeserializeMemcpyable;
     using common_robotics_utilities::serialization::DeserializeVectorLike;
     uint64_t current_position = starting_offset;
     // Deserialize the initialized
-    const std::pair<uint8_t, uint64_t> initialized_deserialized
+    const auto initialized_deserialized
         = DeserializeMemcpyable<uint8_t>(buffer, current_position);
-    initialized_ = static_cast<bool>(initialized_deserialized.first);
-    current_position += initialized_deserialized.second;
+    initialized_ = static_cast<bool>(initialized_deserialized.Value());
+    current_position += initialized_deserialized.BytesRead();
     // Deserialize the planner tree
-    std::function<std::pair<UncertaintyPlanningTreeState, uint64_t>(
-        const std::vector<uint8_t>&, const uint64_t)>
-            planning_tree_state_deserializer_fn
-        = [] (const std::vector<uint8_t>& deser_buffer,
-              const uint64_t deser_current)
+    const Deserializer<UncertaintyPlanningTreeState>
+        planning_tree_state_deserializer_fn
+            = [] (const std::vector<uint8_t>& deser_buffer,
+                  const uint64_t deser_current)
     {
       return UncertaintyPlanningTreeState::Deserialize(
           deser_buffer, deser_current, UncertaintyPlanningState::Deserialize);
     };
-    const std::pair<UncertaintyPlanningTree, uint64_t> planner_tree_deserialized
+    const auto planner_tree_deserialized
         = DeserializeVectorLike<
             UncertaintyPlanningTreeState, UncertaintyPlanningTree>(
                 buffer, current_position, planning_tree_state_deserializer_fn);
-    planner_tree_ = planner_tree_deserialized.first;
-    current_position += planner_tree_deserialized.second;
+    planner_tree_ = planner_tree_deserialized.Value();
+    current_position += planner_tree_deserialized.BytesRead();
     // Deserialize the goal
-    const std::pair<Configuration, uint64_t> goal_deserialized
+    const auto goal_deserialized
         = ConfigSerializer::Deserialize(buffer, current_position);
-    goal_ = goal_deserialized.first;
-    current_position += goal_deserialized.second;
+    goal_ = goal_deserialized.Value();
+    current_position += goal_deserialized.BytesRead();
     // Deserialize the marginal edge weight
-    const std::pair<double, uint64_t> marginal_edge_weight_deserialized
+    const auto marginal_edge_weight_deserialized
         = DeserializeMemcpyable<double>(buffer, current_position);
-    marginal_edge_weight_ = marginal_edge_weight_deserialized.first;
-    current_position += marginal_edge_weight_deserialized.second;
+    marginal_edge_weight_ = marginal_edge_weight_deserialized.Value();
+    current_position += marginal_edge_weight_deserialized.BytesRead();
     // Deserialize the conformant planning threshold
-    const std::pair<double, uint64_t> conformant_planning_threshold_deserialized
+    const auto conformant_planning_threshold_deserialized
         = DeserializeMemcpyable<double>(buffer, current_position);
     conformant_planning_threshold_
-        = conformant_planning_threshold_deserialized.first;
-    current_position += conformant_planning_threshold_deserialized.second;
+        = conformant_planning_threshold_deserialized.Value();
+    current_position += conformant_planning_threshold_deserialized.BytesRead();
     // Deserialize the edge attempt threshold
-    const std::pair<uint32_t, uint64_t> edge_attempt_threshold_deserialized
+    const auto edge_attempt_threshold_deserialized
         = DeserializeMemcpyable<uint32_t>(buffer, current_position);
-    edge_attempt_threshold_ = edge_attempt_threshold_deserialized.first;
-    current_position += edge_attempt_threshold_deserialized.second;
+    edge_attempt_threshold_ = edge_attempt_threshold_deserialized.Value();
+    current_position += edge_attempt_threshold_deserialized.BytesRead();
     // Deserialize the policy action attempt count
-    const std::pair<uint32_t, uint64_t> policy_action_attempt_count_deserialized
+    const auto policy_action_attempt_count_deserialized
         = DeserializeMemcpyable<uint32_t>(buffer, current_position);
     policy_action_attempt_count_
-        = policy_action_attempt_count_deserialized.first;
-    current_position += policy_action_attempt_count_deserialized.second;
+        = policy_action_attempt_count_deserialized.Value();
+    current_position += policy_action_attempt_count_deserialized.BytesRead();
     // Rebuild the policy graph
     RebuildPolicyGraph();
     // Figure out how many bytes were read
@@ -912,11 +929,12 @@ private:
           const std::vector<Configuration, ConfigAlloc>&,
           const Configuration&)>& particle_clustering_fn) const
   {
+    using common_robotics_utilities::simple_knearest_neighbors
+        ::IndexAndDistance;
     // Get the starting state - NOTE, we ignore the last node in the policy
     // graph, which is the virtual goal node
-    std::vector<std::pair<int64_t, double>> per_thread_best_node(
-        common_robotics_utilities::openmp_helpers::GetNumOmpThreads(),
-        std::make_pair(-1, std::numeric_limits<double>::infinity()));
+    std::vector<IndexAndDistance> per_thread_best_node(
+        common_robotics_utilities::openmp_helpers::GetNumOmpThreads());
     #pragma omp parallel for
     for (int64_t node_idx = 0;
          node_idx < static_cast<int64_t>(
@@ -940,25 +958,23 @@ private:
                 ::GetContextOmpThreadNum();
         const double expected_cost_to_goal
             = policy_dijkstras_result_.GetNodeDistance(node_idx);
-        if (expected_cost_to_goal < per_thread_best_node.at(thread_id).second)
+        if (expected_cost_to_goal
+            < per_thread_best_node.at(thread_id).Distance())
         {
-          per_thread_best_node.at(thread_id).first = node_idx;
-          per_thread_best_node.at(thread_id).second = expected_cost_to_goal;
+          per_thread_best_node.at(thread_id).SetIndexAndDistance(
+              node_idx, expected_cost_to_goal);
         }
       }
     }
-    int64_t best_node_index = -1;
-    double best_node_expected_cost_to_goal
-        = std::numeric_limits<double>::infinity();
+    IndexAndDistance best_node;
     for (const auto& thread_best : per_thread_best_node)
     {
-      if (thread_best.second < best_node_expected_cost_to_goal)
+      if (thread_best.Distance() < best_node.Distance())
       {
-        best_node_index = thread_best.first;
-        best_node_expected_cost_to_goal = thread_best.second;
+        best_node.SetFromOther(thread_best);
       }
     }
-    return best_node_index;
+    return best_node.Index();
   }
 
   PolicyQueryResult<Configuration> QueryStartBestAction(
@@ -1006,7 +1022,8 @@ private:
     std::map<int64_t, uint64_t> previous_state_index_possibilities;
     // Go through the entire tree and retrieve all states with matching
     // transition IDs
-    for (int64_t idx = 0; idx < (int64_t)planner_tree_.size(); idx++)
+    for (int64_t idx = 0; idx < static_cast<int64_t>(planner_tree_.size());
+         idx++)
     {
       const UncertaintyPlanningTreeState& candidate_tree_state
           = planner_tree_.at(static_cast<size_t>(idx));
@@ -1670,77 +1687,22 @@ private:
          itr != transition_children_map.end(); ++itr)
     {
       const std::vector<int64_t> transition_child_indices = itr->second;
-      UpdateEstimatedEffectiveProbabilities(transition_child_indices);
+      // I don't know why this needs the return type declared, but it does.
+      const std::function<UncertaintyPlanningState&(const int64_t)>
+          get_planning_state_fn
+              = [&] (const int64_t state_index) -> UncertaintyPlanningState&
+      {
+        return planner_tree_.at(static_cast<size_t>(state_index))
+            .GetValueMutable();
+      };
+      UpdateEstimatedEffectiveProbabilities(
+          get_planning_state_fn, transition_child_indices,
+          edge_attempt_threshold_, logging_fn_);
     }
     // Perform the same update on all of our children
     for (const int64_t child_state_index : child_state_indices)
     {
       UpdateChildTransitionProbabilities(child_state_index);
-    }
-  }
-
-  void UpdateEstimatedEffectiveProbabilities(
-      const std::vector<int64_t>& transition_child_states)
-  {
-    // Now that we have the forward-propagated states, we go back and update
-    // their effective edge P(feasibility)
-    for (size_t idx = 0; idx < transition_child_states.size(); idx++)
-    {
-      const int64_t current_state_index = transition_child_states.at(idx);
-      UncertaintyPlanningTreeState& current_tree_state
-          = planner_tree_.at(static_cast<size_t>(current_state_index));
-      UncertaintyPlanningState& current_state
-          = current_tree_state.GetValueMutable();
-      double percent_active = 1.0;
-      double p_reached = 0.0;
-      for (uint32_t try_attempt = 0; try_attempt < edge_attempt_threshold_;
-           try_attempt++)
-      {
-        // How many particles got to our state on this attempt?
-        p_reached += (percent_active * current_state.GetRawEdgePfeasibility());
-        // Update the percent of particles that are still usefully active
-        double updated_percent_active = 0.0;
-        for (size_t other_idx = 0; other_idx < transition_child_states.size();
-             other_idx++)
-        {
-          if (other_idx != idx)
-          {
-            const int64_t other_state_index
-                = transition_child_states.at(other_idx);
-            const UncertaintyPlanningTreeState& other_tree_state
-                = planner_tree_.at(static_cast<size_t>(other_state_index));
-            const UncertaintyPlanningState& other_state
-                = other_tree_state.GetValueImmutable();
-            // Only if this state has nominally independent outcomes can we
-            // expect particles that return to the parent to actually reach a
-            // different outcome in future repeats
-            if (other_state.IsActionOutcomeNominallyIndependent())
-            {
-              const double p_reached_other
-                  = percent_active * other_state.GetRawEdgePfeasibility();
-              const double p_returned_to_parent
-                  = p_reached_other * other_state.GetReverseEdgePfeasibility();
-              updated_percent_active += p_returned_to_parent;
-            }
-          }
-        }
-        percent_active = updated_percent_active;
-      }
-      if ((p_reached >= 0.0) && (p_reached <= 1.0))
-      {
-        current_state.SetEffectiveEdgePfeasibility(p_reached);
-      }
-      else if ((p_reached >= 0.0) && (p_reached <= 1.001))
-      {
-        Log("WARNING - P(reached) = " + std::to_string(p_reached)
-            + " > 1.0 (probably numerical error)", 1);
-        p_reached = 1.0;
-        current_state.SetEffectiveEdgePfeasibility(p_reached);
-      }
-      else
-      {
-        throw std::runtime_error("p_reached out of range [0, 1]");
-      }
     }
   }
 
@@ -1837,10 +1799,72 @@ private:
 
 public:
 
+  static void UpdateEstimatedEffectiveProbabilities(
+      const std::function<UncertaintyPlanningState&(const int64_t)>&
+          get_planning_state_fn,
+      const std::vector<int64_t>& transition_state_indices,
+      const uint32_t edge_attempt_threshold,
+      const LoggingFunction& logging_fn)
+  {
+    // Now that we have the forward-propagated states, we go back and update
+    // their effective edge P(feasibility)
+    for (const int64_t current_state_index : transition_state_indices)
+    {
+      UncertaintyPlanningState& current_state
+          = get_planning_state_fn(current_state_index);
+      double percent_active = 1.0;
+      double p_reached = 0.0;
+      for (uint32_t try_attempt = 0; try_attempt < edge_attempt_threshold;
+           try_attempt++)
+      {
+        // How many particles got to our state on this attempt?
+        p_reached += (percent_active * current_state.GetRawEdgePfeasibility());
+        // Update the percent of particles that are still usefully active
+        double updated_percent_active = 0.0;
+        for (const int64_t other_state_index : transition_state_indices)
+        {
+          if (other_state_index != current_state_index)
+          {
+            const UncertaintyPlanningState& other_state
+                = get_planning_state_fn(other_state_index);
+            // Only if this state has nominally independent outcomes can we
+            // expect particles that return to the parent to actually reach a
+            // different outcome in future repeats
+            if (other_state.IsActionOutcomeNominallyIndependent())
+            {
+              const double p_reached_other
+                  = percent_active * other_state.GetRawEdgePfeasibility();
+              const double p_returned_to_parent
+                  = p_reached_other * other_state.GetReverseEdgePfeasibility();
+              updated_percent_active += p_returned_to_parent;
+            }
+          }
+        }
+        percent_active = updated_percent_active;
+      }
+      if ((p_reached >= 0.0) && (p_reached <= 1.0))
+      {
+        current_state.SetEffectiveEdgePfeasibility(p_reached);
+      }
+      else if ((p_reached >= 0.0) && (p_reached <= 1.001))
+      {
+        logging_fn(
+            "WARNING - P(reached) = " + std::to_string(p_reached)
+            + " > 1.0 (probably numerical error)", 1);
+        p_reached = 1.0;
+        current_state.SetEffectiveEdgePfeasibility(p_reached);
+      }
+      else
+      {
+        throw std::runtime_error("p_reached out of range [0, 1]");
+      }
+    }
+  }
+
   static double ComputeTransitionGoalProbability(
       const UncertaintyPlanningStateVector& child_nodes,
       const uint32_t planner_action_try_attempts,
-      const std::function<void(const std::string&, const int32_t)>& logging_fn)
+      const LoggingFunction& logging_fn)
   {
     // Let's handle the special cases first
     // The most common case - a non-split transition

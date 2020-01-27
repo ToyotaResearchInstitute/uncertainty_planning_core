@@ -4,7 +4,8 @@ project(uncertainty_planning_core)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS roscpp visualization_msgs common_robotics_utilities)
+find_package(catkin REQUIRED COMPONENTS
+             roscpp visualization_msgs common_robotics_utilities)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -18,11 +19,19 @@ find_package(OpenMP)
 ###################################
 ## The catkin_package macro generates cmake config files for your package
 ## Declare things to be passed to dependent projects
-## INCLUDE_DIRS: uncomment this if you package contains header files
-## LIBRARIES: libraries you create in this project that dependent projects also need
+## LIBRARIES: libraries you create in this project
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
-## DEPENDS: system dependencies of this project that dependent projects also need
-catkin_package(INCLUDE_DIRS include LIBRARIES ${PROJECT_NAME} CATKIN_DEPENDS roscpp visualization_msgs common_robotics_utilities DEPENDS Eigen3)
+## DEPENDS: system dependencies of this project
+catkin_package(INCLUDE_DIRS
+               include
+               LIBRARIES
+               ${PROJECT_NAME}
+               CATKIN_DEPENDS
+               roscpp
+               visualization_msgs
+               common_robotics_utilities
+               DEPENDS
+               Eigen3)
 
 ###########
 ## Build ##
@@ -31,7 +40,8 @@ catkin_package(INCLUDE_DIRS include LIBRARIES ${PROJECT_NAME} CATKIN_DEPENDS ros
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 # include_directories(include)
-include_directories(include SYSTEM ${catkin_INCLUDE_DIRS} ${Eigen3_INCLUDE_DIRS})
+include_directories(include SYSTEM ${catkin_INCLUDE_DIRS}
+                                   ${Eigen3_INCLUDE_DIRS})
 
 ## Build options
 add_compile_options(-std=c++11)
@@ -44,6 +54,7 @@ add_compile_options(-O3)
 add_compile_options(-g)
 add_compile_options(-flto)
 add_compile_options(-Werror=non-virtual-dtor)
+add_compile_options(-Wold-style-cast)
 add_compile_options(-march=native)
 
 ## It's not clear if add_compile_options does the right things for flags that
@@ -66,18 +77,37 @@ set(UNCERTAINTY_PLANNING_CORE_SOURCES
     include/${PROJECT_NAME}/task_planner_adapter.hpp
     src/${PROJECT_NAME}/uncertainty_planning_core.cpp)
 
-###################################################################################################################
-# CORE LIBRARY
-###################################################################################################################
+################
+# CORE LIBRARY #
+################
 
 add_library(${PROJECT_NAME} ${UNCERTAINTY_PLANNING_CORE_SOURCES})
 add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} rt)
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
 
-###################################################################################################################
-# Example of task-level planning using the adapter
-###################################################################################################################
+####################################################
+# Example of task-level planning using the adapter #
+####################################################
 
-add_executable(task_planner_adapter_example src/task_planner_adapter_example.cpp)
+add_executable(task_planner_adapter_example
+               src/task_planner_adapter_example.cpp)
 add_dependencies(task_planner_adapter_example ${catkin_EXPORTED_TARGETS})
-target_link_libraries(task_planner_adapter_example ${PROJECT_NAME} ${catkin_LIBRARIES} rt)
+target_link_libraries(task_planner_adapter_example ${PROJECT_NAME}
+                                                   ${catkin_LIBRARIES})
+
+#############
+## Install ##
+#############
+
+## Mark library for installation
+install(TARGETS ${PROJECT_NAME} task_planner_adapter_example
+    ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+## Mark cpp header files for installation
+install(DIRECTORY include/${PROJECT_NAME}/
+    DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+    FILES_MATCHING PATTERN "*.hpp"
+    PATTERN ".svn" EXCLUDE
+)

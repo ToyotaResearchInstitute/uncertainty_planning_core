@@ -14,7 +14,7 @@ While the planner and execution policy are themselves template-based, this packa
 ## Dependencies
 
 - [common_robotics_utilities](https://github.com/calderpg/common_robotics_utilities)
- 
+
 Provides a range of utility and math functions, as well as templated implementations of kinodynamic RRT, Dijkstra's algorithm, and hierarchical clustering.
 
 - [ROS](http://ros.org)

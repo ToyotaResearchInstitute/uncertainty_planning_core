@@ -18,8 +18,8 @@ template<typename Configuration,
 class SimpleOutcomeClusteringInterface
 {
 protected:
-  typedef common_robotics_utilities::simple_robot_model_interface
-      ::SimpleRobotModelInterface<Configuration, ConfigAlloc> Robot;
+  using Robot = common_robotics_utilities::simple_robot_model_interface
+      ::SimpleRobotModelInterface<Configuration, ConfigAlloc>;
 
 public:
   virtual ~SimpleOutcomeClusteringInterface() {}

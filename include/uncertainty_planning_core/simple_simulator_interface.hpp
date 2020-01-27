@@ -138,8 +138,8 @@ template<typename Configuration, typename RNG,
 class SimpleSimulatorInterface
 {
 protected:
-  typedef common_robotics_utilities::simple_robot_model_interface
-      ::SimpleRobotModelInterface<Configuration, ConfigAlloc> Robot;
+  using Robot = common_robotics_utilities::simple_robot_model_interface
+      ::SimpleRobotModelInterface<Configuration, ConfigAlloc>;
 
 public:
   virtual ~SimpleSimulatorInterface() {}
