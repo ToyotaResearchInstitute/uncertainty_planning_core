@@ -64,6 +64,8 @@ public:
       const PolicyPlanningStatistics& statistics)
       : statistics_(statistics) {}
 
+  UncertaintyPolicyPlanningResult() {}
+
   const ExecutionPolicyType& Policy() const { return policy_; }
 
   ExecutionPolicyType& MutablePolicy() { return policy_; }
@@ -117,6 +119,8 @@ public:
       const std::vector<PolicyExecutionPerformance>& execution_performance)
       : policy_(policy), statistics_(statistics),
         execution_performance_(execution_performance) {}
+
+  UncertaintyPolicyExecutionResult() {}
 
   const ExecutionPolicyType& Policy() const { return policy_; }
 

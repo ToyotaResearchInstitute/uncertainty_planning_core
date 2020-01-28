@@ -286,6 +286,8 @@ public:
       const std::map<std::string, double>& execution_statistics)
       : policy_(policy), execution_statistics_(execution_statistics) {}
 
+  TaskPlanningPolicyExecutionResult() {}
+
   const TaskPlanningPolicy& Policy() const { return policy_; }
 
   TaskPlanningPolicy& MutablePolicy() { return policy_; }
