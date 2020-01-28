@@ -271,6 +271,38 @@ public:
 
 template<typename State, typename StateSerializer,
          typename StateAlloc=std::allocator<State>>
+class TaskPlanningPolicyExecutionResult
+{
+private:
+  using TaskPlanningPolicy
+      = ExecutionPolicy<State, StateSerializer, StateAlloc>;
+
+  TaskPlanningPolicy policy_;
+  std::map<std::string, double> execution_statistics_;
+
+public:
+  TaskPlanningPolicyExecutionResult(
+      const TaskPlanningPolicy& policy,
+      const std::map<std::string, double>& execution_statistics)
+      : policy_(policy), execution_statistics_(execution_statistics) {}
+
+  const TaskPlanningPolicy& Policy() const { return policy_; }
+
+  TaskPlanningPolicy& MutablePolicy() { return policy_; }
+
+  const std::map<std::string, double>& ExecutionStatistics() const
+  {
+    return execution_statistics_;
+  }
+
+  std::map<std::string, double>& MutableExecutionStatistics()
+  {
+    return execution_statistics_;
+  }
+};
+
+template<typename State, typename StateSerializer,
+         typename StateAlloc=std::allocator<State>>
 class TaskPlannerAdapter: public TaskPlannerClustering<State, StateAlloc>,
                           public TaskPlannerSampling<State>,
                           public TaskPlannerSimulator<State, StateAlloc>
@@ -288,6 +320,8 @@ private:
       = ExecutionPolicy<State, StateSerializer, StateAlloc>;
   using PlanTaskPlanningPolicyResult
       = UncertaintyPolicyPlanningResult<State, StateSerializer, StateAlloc>;
+  using ExecuteTaskPlanningPolicyResult
+      = TaskPlanningPolicyExecutionResult<State, StateSerializer, StateAlloc>;
   using TaskPlanningPolicyQuery = PolicyQueryResult<State>;
   using TaskPlanningSpace
       = UncertaintyPlanningSpace<State, StateSerializer, StateAlloc, PRNG>;
@@ -1053,33 +1087,6 @@ public:
                                            p_task_done_termination_threshold,
                                            drawing_fn_);
   }
-
-  class ExecuteTaskPlanningPolicyResult
-  {
-  private:
-    TaskPlanningPolicy policy_;
-    std::map<std::string, double> execution_statistics_;
-
-  public:
-    ExecuteTaskPlanningPolicyResult(
-        const TaskPlanningPolicy& policy,
-        const std::map<std::string, double>& execution_statistics)
-        : policy_(policy), execution_statistics_(execution_statistics) {}
-
-    const TaskPlanningPolicy& Policy() const { return policy_; }
-
-    TaskPlanningPolicy& MutablePolicy() { return policy_; }
-
-    const std::map<std::string, double>& ExecutionStatistics() const
-    {
-      return execution_statistics_;
-    }
-
-    std::map<std::string, double>& MutableExecutionStatistics()
-    {
-      return execution_statistics_;
-    }
-  };
 
   /// Execute a task policy by repeatedly executing the policy until the task
   /// has been completed

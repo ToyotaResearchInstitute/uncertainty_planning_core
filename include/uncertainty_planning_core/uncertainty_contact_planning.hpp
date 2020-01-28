@@ -42,7 +42,7 @@ using PolicyActionExecutionFunction
         const bool, const bool)>;
 
 template<typename Configuration, typename ConfigSerializer,
-         typename ConfigAlloc>
+         typename ConfigAlloc=std::allocator<Configuration>>
 class UncertaintyPolicyPlanningResult
 {
 private:
@@ -97,7 +97,7 @@ public:
 };
 
 template<typename Configuration, typename ConfigSerializer,
-         typename ConfigAlloc>
+         typename ConfigAlloc=std::allocator<Configuration>>
 class UncertaintyPolicyExecutionResult
 {
 private:
