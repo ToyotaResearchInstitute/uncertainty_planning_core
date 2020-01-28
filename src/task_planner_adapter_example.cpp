@@ -552,7 +552,6 @@ int main(int argc, char** argv)
                               100u, 100u, true, false);
   logging_fn(
       "Task execution statistics: "
-      + common_robotics_utilities::print::Print(
-          exec_result.ExecutionStatistics()), 1);
+      + common_robotics_utilities::print::Print(exec_result.Statistics()), 1);
   return 0;
 }

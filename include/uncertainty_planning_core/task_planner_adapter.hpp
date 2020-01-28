@@ -278,13 +278,13 @@ private:
       = ExecutionPolicy<State, StateSerializer, StateAlloc>;
 
   TaskPlanningPolicy policy_;
-  std::map<std::string, double> execution_statistics_;
+  std::map<std::string, double> statistics_;
 
 public:
   TaskPlanningPolicyExecutionResult(
       const TaskPlanningPolicy& policy,
-      const std::map<std::string, double>& execution_statistics)
-      : policy_(policy), execution_statistics_(execution_statistics) {}
+      const std::map<std::string, double>& statistics)
+      : policy_(policy), statistics_(statistics) {}
 
   TaskPlanningPolicyExecutionResult() {}
 
@@ -292,15 +292,12 @@ public:
 
   TaskPlanningPolicy& MutablePolicy() { return policy_; }
 
-  const std::map<std::string, double>& ExecutionStatistics() const
+  const std::map<std::string, double>& Statistics() const
   {
-    return execution_statistics_;
+    return statistics_;
   }
 
-  std::map<std::string, double>& MutableExecutionStatistics()
-  {
-    return execution_statistics_;
-  }
+  std::map<std::string, double>& MutableStatistics() { return statistics_; }
 };
 
 template<typename State, typename StateSerializer,
