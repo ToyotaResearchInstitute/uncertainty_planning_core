@@ -229,13 +229,13 @@ public:
       const std::function<void(
           const visualization_msgs::MarkerArray&)>& display_fn) = 0;
 };
-}  // namespace uncertainty_planning_core
 
 template<typename Configuration>
 std::ostream& operator<<(
-    std::ostream& strm,
-    const uncertainty_planning_core::SimulationResult<Configuration>& result)
+    std::ostream& strm, const SimulationResult<Configuration>& result)
 {
   strm << result.Print();
   return strm;
 }
+}  // namespace uncertainty_planning_core
+

@@ -464,7 +464,7 @@ int main(int argc, char** argv)
   const uncertainty_planning_core::LoggingFunction logging_fn
       = [&] (const std::string& msg, const int32_t level)
   {
-    ROS_INFO_NAMED(ros::this_node::getName(), "[%d] %s", level, msg.c_str());
+    ROS_INFO("[%d] %s", level, msg.c_str());
   };
   // Get seed for PRNG
   int32_t prng_seed_init

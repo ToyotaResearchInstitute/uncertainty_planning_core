@@ -1938,14 +1938,12 @@ public:
     }
   }
 };
-}  // namespace uncertainty_planning_core
 
 template<typename Configuration, typename ConfigSerializer,
          typename ConfigAlloc=std::allocator<Configuration>>
 std::ostream& operator<<(
     std::ostream& strm,
-    const uncertainty_planning_core::ExecutionPolicy<
-        Configuration, ConfigSerializer, ConfigAlloc>& policy)
+    const ExecutionPolicy<Configuration, ConfigSerializer, ConfigAlloc>& policy)
 {
   const auto& raw_policy_tree = policy.GetRawPolicyTree();
   strm << "Execution Policy - Policy: ";
@@ -1964,3 +1962,5 @@ std::ostream& operator<<(
   }
   return strm;
 }
+}  // namespace uncertainty_planning_core
+

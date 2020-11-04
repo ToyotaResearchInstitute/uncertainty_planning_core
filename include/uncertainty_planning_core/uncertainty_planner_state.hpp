@@ -873,15 +873,16 @@ public:
     return strm.str();
   }
 };
-}
 
 template<typename Configuration, typename ConfigSerializer,
          typename ConfigAlloc=std::allocator<Configuration>>
 std::ostream& operator<<(
     std::ostream& strm,
-    const uncertainty_planning_core::UncertaintyPlannerState<
+    const UncertaintyPlannerState<
         Configuration, ConfigSerializer, ConfigAlloc>& state)
 {
     strm << state.Print();
     return strm;
 }
+}  // namespace uncertainty_planning_core
+
