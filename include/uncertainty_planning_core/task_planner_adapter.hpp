@@ -13,8 +13,17 @@
 #include <random>
 #include <atomic>
 #include <Eigen/Geometry>
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/color_rgba.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
 #include <ros/ros.h>
-#include <visualization_msgs/Marker.h>
+#include <std_msgs/ColorRGBA.h>
+#include <visualization_msgs/MarkerArray.h>
+#else
+#error "Undefined or unknown UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION"
+#endif
 #include <common_robotics_utilities/math.hpp>
 #include <common_robotics_utilities/openmp_helpers.hpp>
 #include <common_robotics_utilities/conversions.hpp>
@@ -324,6 +333,14 @@ private:
   using TaskPlanningPolicyQuery = PolicyQueryResult<State>;
   using TaskPlanningSpace
       = UncertaintyPlanningSpace<State, StateSerializer, StateAlloc, PRNG>;
+
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+  using ColorRGBA = std_msgs::msg::ColorRGBA;
+  using MarkerArray = visualization_msgs::msg::MarkerArray;
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
+  using ColorRGBA = std_msgs::ColorRGBA;
+  using MarkerArray = visualization_msgs::MarkerArray;
+#endif
 
   static void
   DeleteSamplerPtrFn(TaskPlannerSampling<State>* ptr)
@@ -955,7 +972,7 @@ private:
     logging_fn_(message, level);
   }
 
-  void Draw(const visualization_msgs::MarkerArray& markers)
+  void Draw(const MarkerArray& markers)
   {
     drawing_fn_(markers);
   }
@@ -1467,15 +1484,15 @@ public:
     return "world";
   }
 
-  virtual visualization_msgs::MarkerArray MakeEnvironmentDisplayRep() const
+  virtual MarkerArray MakeEnvironmentDisplayRep() const
   {
-    return visualization_msgs::MarkerArray();
+    return MarkerArray();
   }
 
-  virtual visualization_msgs::MarkerArray MakeConfigurationDisplayRep(
+  virtual MarkerArray MakeConfigurationDisplayRep(
       const TaskStateRobotBasePtr& immutable_robot,
       const State& configuration,
-      const std_msgs::ColorRGBA& color,
+      const ColorRGBA& color,
       const int32_t starting_index,
       const std::string& config_marker_ns) const
   {
@@ -1484,14 +1501,14 @@ public:
     UNUSED(color);
     UNUSED(starting_index);
     UNUSED(config_marker_ns);
-    return visualization_msgs::MarkerArray();
+    return MarkerArray();
   }
 
-  virtual visualization_msgs::MarkerArray MakeControlInputDisplayRep(
+  virtual MarkerArray MakeControlInputDisplayRep(
       const TaskStateRobotBasePtr& immutable_robot,
       const State& configuration,
       const Eigen::VectorXd& control_input,
-      const std_msgs::ColorRGBA& color,
+      const ColorRGBA& color,
       const int32_t starting_index,
       const std::string& control_input_marker_ns) const
   {
@@ -1501,7 +1518,7 @@ public:
     UNUSED(color);
     UNUSED(starting_index);
     UNUSED(control_input_marker_ns);
-    return visualization_msgs::MarkerArray();
+    return MarkerArray();
   }
 
   virtual Eigen::Vector4d Get3dPointForConfig(

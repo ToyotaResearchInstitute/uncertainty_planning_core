@@ -450,7 +450,8 @@ int main(int argc, char** argv)
   rclcpp::init(argc, argv);
   auto node = std::make_shared<rclcpp::Node>("task_planner_adapter_test");
   // Get debug level
-  const int32_t debug_level = node->declare_parameter("debug_level", 0);
+  const int32_t debug_level
+      = static_cast<int32_t>(node->declare_parameter("debug_level", 0));
   // Make display function
   auto display_debug_publisher
       = node->create_publisher<visualization_msgs::msg::MarkerArray>(

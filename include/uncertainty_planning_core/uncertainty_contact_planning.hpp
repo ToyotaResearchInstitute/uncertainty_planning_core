@@ -35,6 +35,7 @@
 #include <visualization_msgs/MarkerArray.h>
 #else
 #error "Undefined or unknown UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION"
+#endif
 #include <common_robotics_utilities/conversions.hpp>
 #include <omp.h>
 
@@ -149,9 +150,25 @@ public:
 
 #if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
 struct ExecutionTimeLimit {
+  ExecutionTimeLimit(double _secs)
+    : secs(_secs), clock(std::make_shared<rclcpp::Clock>())
+  {
+  }
+
+  ExecutionTimeLimit(double _secs, rclcpp::Clock::SharedPtr _clock)
+    : secs(_secs), clock(_clock)
+  {
+  }
+
   double secs;
   rclcpp::Clock::SharedPtr clock;
 };
+
+std::ostream& operator<<(
+    std::ostream& strm, const ExecutionTimeLimit& time_limit)
+{
+  return strm << time_limit.secs;
+}
 #elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
 using ExecutionTimeLimit = double;
 #endif
@@ -160,7 +177,7 @@ class ExecutionTimer {
 public:
 #if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
   inline ExecutionTimer(ExecutionTimeLimit time_limit)
-    : time_limit_(time_limit.secs), clock_(time_limit.clock)
+    : clock_(time_limit.clock), time_limit_(time_limit.secs)
   {
   }
 #elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
@@ -187,10 +204,10 @@ public:
   }
 
   inline bool expired() {
-    if (expiration_time_ > 0.0)
+    if (time_limit_ > 0.0)
     {
       const double elapsed_time = current_time() - start_time_;
-      return elapsed_time >= time_limit_.seconds;
+      return elapsed_time >= time_limit_;
     }
     return false;
   }
@@ -216,7 +233,7 @@ private:
   rclcpp::Clock::SharedPtr clock_;
 #elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
   double current_time() {
-    return ros::Time::now().toSec()
+    return ros::Time::now().toSec();
   }
 #endif
 
@@ -224,9 +241,6 @@ private:
   double stop_time_{-1.0};
   double time_limit_;
 };
-
-#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
-
 
 template<typename Configuration, typename ConfigSerializer,
          typename ConfigAlloc=std::allocator<Configuration>,
@@ -1683,8 +1697,9 @@ public:
       Log("Started policy exec @ " + std::to_string(exec_timer.start_time())
           + " finished policy exec @ " + std::to_string(exec_timer.stop_time()),
           1);
+      const double execution_seconds = exec_timer.duration();
       policy_execution_performance.at(idx) = PolicyExecutionPerformance(
-          policy_execution.ExecutionSteps(), exec_timer.duration(),
+          policy_execution.ExecutionSteps(), execution_seconds,
           policy_execution.ExecutionSuccess());
       policy_trajectories.at(idx) = policy_execution.ExecutionTrajectory();
       if (enable_cumulative_learning)

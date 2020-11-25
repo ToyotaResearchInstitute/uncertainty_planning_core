@@ -59,7 +59,7 @@ struct PLANNING_AND_EXECUTION_OPTIONS
   uint32_t policy_action_attempt_count = 0u;
   // Execution limits
   uint32_t max_exec_actions = 0u;
-  double max_policy_exec_time = 0.0;
+  ExecutionTimeLimit max_policy_exec_time = 0.0;
   // Control flags
   int32_t debug_level = 0;
   bool use_contact = false;
@@ -114,14 +114,15 @@ inline PLANNING_AND_EXECUTION_OPTIONS GetOptions(
           node->declare_parameter("policy_action_attempt_count",
               static_cast<int>(options.policy_action_attempt_count)));
   options.debug_level
-      = node->declare_parameter("debug_level", options.debug_level);
+      = static_cast<int32_t>(
+          node->declare_parameter("debug_level", options.debug_level));
   options.use_contact
       = node->declare_parameter("use_contact", options.use_contact);
   options.use_reverse
       = node->declare_parameter("use_reverse", options.use_reverse);
   options.num_policy_simulations
       = static_cast<uint32_t>(
-          node->declare_parameter(("num_policy_simulations",
+          node->declare_parameter("num_policy_simulations",
               static_cast<int>(options.num_policy_simulations)));
   options.num_policy_executions
       = static_cast<uint32_t>(
@@ -136,9 +137,9 @@ inline PLANNING_AND_EXECUTION_OPTIONS GetOptions(
       = static_cast<uint32_t>(
           node->declare_parameter("max_exec_actions",
               static_cast<int>(options.max_exec_actions)));
-  options.max_policy_exec_time
-      = node->declare_parameter("max_policy_exec_time",
-                                options.max_policy_exec_time);
+  options.max_policy_exec_time = ExecutionTimeLimit(
+      node->declare_parameter("max_policy_exec_time", 0.0),
+      node->get_clock());
   options.policy_action_attempt_count
       = static_cast<uint32_t>(
           node->declare_parameter("policy_action_attempt_count",
