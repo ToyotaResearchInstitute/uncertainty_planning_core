@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>uncertainty_planning_core</name>
+  <version>0.1.0</version>
+  <description>The uncertainty_planning_core package</description>
+  <maintainer email="calder.pg@gmail.com">Calder Phillips-Grafflin</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>ament_cmake_ros</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>visualization_msgs</depend>
+  <depend>common_robotics_utilities</depend>
+
+  <!-- The export tag contains other, unspecified, tags -->
+  <export>
+    <build_type>ament_cmake</build_type>
+    <!-- You can specify that this package is a metapackage here: -->
+    <!-- <metapackage/> -->
+
+    <!-- Other tools can request additional information be placed here -->
+
+  </export>
+</package>
