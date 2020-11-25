@@ -27,8 +27,14 @@
 #include <uncertainty_planning_core/uncertainty_planner_state.hpp>
 #include <uncertainty_planning_core/simple_simulator_interface.hpp>
 #include <uncertainty_planning_core/execution_policy.hpp>
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+#include <rclcpp/rclcpp.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
 #include <ros/ros.h>
 #include <visualization_msgs/MarkerArray.h>
+#else
+#error "Undefined or unknown UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION"
 #include <common_robotics_utilities/conversions.hpp>
 #include <omp.h>
 
@@ -141,6 +147,87 @@ public:
   }
 };
 
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+struct ExecutionTimeLimit {
+  double secs;
+  rclcpp::Clock::SharedPtr clock;
+};
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
+using ExecutionTimeLimit = double;
+#endif
+
+class ExecutionTimer {
+public:
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+  inline ExecutionTimer(ExecutionTimeLimit time_limit)
+    : time_limit_(time_limit.secs), clock_(time_limit.clock)
+  {
+  }
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
+  inline ExecutionTimer(ExecutionTimeLimit time_limit)
+    : time_limit_(time_limit)
+  {
+  }
+#endif
+
+  inline void start()
+  {
+    if (start_time_ >= 0.0) {
+      throw std::logic_error("Execution timer already started");
+    }
+    start_time_ = current_time();
+  }
+
+  inline void stop()
+  {
+    if (stop_time_ >= 0.0) {
+      throw std::logic_error("Execution timer already stopped");
+    }
+    stop_time_ = current_time();
+  }
+
+  inline bool expired() {
+    if (expiration_time_ > 0.0)
+    {
+      const double elapsed_time = current_time() - start_time_;
+      return elapsed_time >= time_limit_.seconds;
+    }
+    return false;
+  }
+
+  inline double start_time() {
+    return start_time_;
+  }
+
+  inline double stop_time() {
+    return stop_time_;
+  }
+
+  inline double duration() {
+    return stop_time_ - start_time_;
+  }
+
+private:
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+  double current_time() {
+    return clock_->now().seconds();
+  }
+
+  rclcpp::Clock::SharedPtr clock_;
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
+  double current_time() {
+    return ros::Time::now().toSec()
+  }
+#endif
+
+  double start_time_{-1.0};
+  double stop_time_{-1.0};
+  double time_limit_;
+};
+
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+
+
 template<typename Configuration, typename ConfigSerializer,
          typename ConfigAlloc=std::allocator<Configuration>,
          typename PRNG=std::mt19937_64>
@@ -202,6 +289,15 @@ protected:
   using StateDistanceFunction
       = std::function<double(
           const UncertaintyPlanningState&, const UncertaintyPlanningState&)>;
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+  using ColorRGBA = std_msgs::msg::ColorRGBA;
+  using Marker = visualization_msgs::msg::Marker;
+  using MarkerArray = visualization_msgs::msg::MarkerArray;
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
+  using ColorRGBA = std_msgs::ColorRGBA;
+  using Marker = visualization_msgs::Marker;
+  using MarkerArray = visualization_msgs::MarkerArray;
+#endif
 
   // Helper classes
   class SimulateParticlesResult
@@ -449,15 +545,15 @@ public:
     // Draw the simulation environment
     display_fn(MakeEnvironmentDisplayRep());
     // Draw the start and goal
-    const std_msgs::ColorRGBA start_color = MakeColor(1.0f, 0.5f, 0.0f, 1.0f);
-    const std_msgs::ColorRGBA goal_color = MakeColor(1.0f, 0.0f, 1.0f, 1.0f);
-    const visualization_msgs::MarkerArray start_markers
+    const ColorRGBA start_color = MakeColor(1.0f, 0.5f, 0.0f, 1.0f);
+    const ColorRGBA goal_color = MakeColor(1.0f, 0.0f, 1.0f, 1.0f);
+    const MarkerArray start_markers
         = simulator_ptr_->MakeConfigurationDisplayRep(
             robot_ptr_, start, start_color, 1, "start_state");
-    const visualization_msgs::MarkerArray goal_markers
+    const MarkerArray goal_markers
         = simulator_ptr_->MakeConfigurationDisplayRep(
             robot_ptr_, goal, goal_color, 1, "goal_state");
-    visualization_msgs::MarkerArray simulator_start_goal_display_rep;
+    MarkerArray simulator_start_goal_display_rep;
     simulator_start_goal_display_rep.markers.insert(
         simulator_start_goal_display_rep.markers.end(),
         start_markers.markers.begin(), start_markers.markers.end());
@@ -477,12 +573,12 @@ public:
     if (debug_level_ >= 20)
     {
       // Draw the action
-      const std_msgs::ColorRGBA free_color = MakeColor(0.0f, 1.0f, 0.0f, 1.0f);
-      const std_msgs::ColorRGBA colliding_color
+      const ColorRGBA free_color = MakeColor(0.0f, 1.0f, 0.0f, 1.0f);
+      const ColorRGBA colliding_color
           = MakeColor(1.0f, 0.0f, 0.0f, 1.0f);
-      const std_msgs::ColorRGBA control_input_color
+      const ColorRGBA control_input_color
           = MakeColor(1.0f, 1.0f, 0.0f, 1.0f);
-      const std_msgs::ColorRGBA control_step_color
+      const ColorRGBA control_step_color
           = MakeColor(0.0f, 1.0f, 1.0f, 1.0f);
       // Keep track of previous position
       Configuration previous_config = start;
@@ -492,7 +588,7 @@ public:
             = step_trace.control_input_step;
         // Draw the control input for the entire trace segment
         const Eigen::VectorXd& control_input = step_trace.control_input;
-        visualization_msgs::MarkerArray control_display_rep
+        MarkerArray control_display_rep
             = simulator_ptr_->MakeControlInputDisplayRep(
                 robot_ptr_, previous_config, control_input, control_input_color,
                 1, "control_input_state");
@@ -514,17 +610,17 @@ public:
                 = contact_resolution_trace.contact_resolution_steps.size() - 1;
             const bool is_resolved_step
                 = (contact_resolution_step_idx == last_step_index);
-            const std_msgs::ColorRGBA& current_color
+            const ColorRGBA& current_color
                 = (is_resolved_step) ? free_color : colliding_color;
-            const visualization_msgs::MarkerArray step_markers
+            const MarkerArray step_markers
                 = simulator_ptr_->MakeConfigurationDisplayRep(
                     robot_ptr_, current_config, current_color, 1,
                     "step_state_");
-            const visualization_msgs::MarkerArray control_step_markers
+            const MarkerArray control_step_markers
                 = simulator_ptr_->MakeControlInputDisplayRep(
                     robot_ptr_, current_config, -control_input_step,
                     control_step_color, 1, "control_step_state");
-            visualization_msgs::MarkerArray simulator_step_display_rep;
+            MarkerArray simulator_step_display_rep;
             simulator_step_display_rep.markers.insert(
                 simulator_step_display_rep.markers.end(),
                 step_markers.markers.begin(), step_markers.markers.end());
@@ -533,7 +629,9 @@ public:
                 control_step_markers.markers.begin(),
                 control_step_markers.markers.end());
             display_fn(simulator_step_display_rep);
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
             ros::Duration(0.05).sleep();
+#endif
           }
         }
       }
@@ -776,11 +874,11 @@ public:
       std::cin.get();
     }
     // Draw the start and goal
-    const std_msgs::ColorRGBA start_color = MakeColor(1.0f, 0.0f, 0.0f, 1.0f);
-    const visualization_msgs::MarkerArray start_markers
+    const ColorRGBA start_color = MakeColor(1.0f, 0.0f, 0.0f, 1.0f);
+    const MarkerArray start_markers
         = simulator_ptr_->MakeConfigurationDisplayRep(
             robot_ptr_, start, start_color, 1, "start_state");
-    visualization_msgs::MarkerArray problem_display_rep;
+    MarkerArray problem_display_rep;
     problem_display_rep.markers.insert(
         problem_display_rep.markers.end(),
         start_markers.markers.begin(),
@@ -837,15 +935,15 @@ public:
       std::cin.get();
     }
     // Draw the start and goal
-    const std_msgs::ColorRGBA start_color = MakeColor(1.0f, 0.0f, 0.0f, 1.0f);
-    const visualization_msgs::MarkerArray start_markers
+    const ColorRGBA start_color = MakeColor(1.0f, 0.0f, 0.0f, 1.0f);
+    const MarkerArray start_markers
         = simulator_ptr_->MakeConfigurationDisplayRep(
             robot_ptr_, start, start_color, 1, "start_state");
-    const std_msgs::ColorRGBA goal_color = MakeColor(0.0, 1.0, 0.0, 1.0);
-    const visualization_msgs::MarkerArray goal_markers
+    const ColorRGBA goal_color = MakeColor(0.0, 1.0, 0.0, 1.0);
+    const MarkerArray goal_markers
         = simulator_ptr_->MakeConfigurationDisplayRep(
             robot_ptr_, goal, goal_color, 1, "goal_state");
-    visualization_msgs::MarkerArray problem_display_rep;
+    MarkerArray problem_display_rep;
     problem_display_rep.markers.insert(
         problem_display_rep.markers.end(),
         start_markers.markers.begin(),
@@ -1013,7 +1111,7 @@ protected:
           const double goal_reached_probability
               = planned_path.back().GetGoalPfeasibility()
                   * planned_path.back().GetMotionPfeasibility();
-          visualization_msgs::MarkerArray path_display_rep;
+          MarkerArray path_display_rep;
           const std::string forward_expectation_ns
               = "final_path_" + std::to_string(pidx + 1);
           const std::string reverse_expectation_ns
@@ -1024,14 +1122,14 @@ protected:
               = planned_path.at(idx);
             const Configuration& current_configuration
               = current_state.GetExpectation();
-            std_msgs::ColorRGBA forward_color;
+            ColorRGBA forward_color;
             forward_color.r
                 = static_cast<float>(1.0 - goal_reached_probability);
             forward_color.g = 0.0f;
             forward_color.b = 0.0f;
             forward_color.a
                 = static_cast<float>(current_state.GetMotionPfeasibility());
-            const visualization_msgs::MarkerArray forward_expectation_markers
+            const MarkerArray forward_expectation_markers
                 = simulator_ptr_->MakeConfigurationDisplayRep(
                     robot_ptr_, current_configuration, forward_color,
                     static_cast<int32_t>(path_display_rep.markers.size() + 1),
@@ -1041,14 +1139,14 @@ protected:
                 path_display_rep.markers.end(),
                 forward_expectation_markers.markers.begin(),
                 forward_expectation_markers.markers.end());
-            std_msgs::ColorRGBA reverse_color;
+            ColorRGBA reverse_color;
             reverse_color.r
                 = static_cast<float>(1.0 - goal_reached_probability);
             reverse_color.g = 0.0f;
             reverse_color.b = 0.0f;
             reverse_color.a = static_cast<float>(
                 current_state.GetReverseEdgePfeasibility());
-            const visualization_msgs::MarkerArray reverse_expectation_markers
+            const MarkerArray reverse_expectation_markers
                 = simulator_ptr_->MakeConfigurationDisplayRep(
                     robot_ptr_, current_configuration, reverse_color,
                     static_cast<int32_t>(path_display_rep.markers.size() + 1),
@@ -1499,7 +1597,7 @@ public:
       const bool link_runtime_states_to_planned_parent,
       const Configuration& start, const Configuration& goal,
       const UncertaintyPlanningPolicyActionExecutionFunction& move_fn,
-      const uint32_t num_executions, const double exec_time_limit,
+      const uint32_t num_executions, const ExecutionTimeLimit exec_time_limit,
       const DisplayFunction& display_fn, const double policy_marker_size,
       const bool wait_for_user, const double draw_wait) const
   {
@@ -1530,7 +1628,7 @@ public:
       const Configuration& start,
       const std::function<bool(const Configuration&)>& user_goal_check_fn,
       const UncertaintyPlanningPolicyActionExecutionFunction& move_fn,
-      const uint32_t num_executions, const double exec_time_limit,
+      const uint32_t num_executions, const ExecutionTimeLimit exec_time_limit,
       const DisplayFunction& display_fn, const double policy_marker_size,
       const bool wait_for_user, const double draw_wait) const
   {
@@ -1549,18 +1647,20 @@ public:
       const bool enable_cumulative_learning, const ConfigVector& start_configs,
       const std::function<bool(const Configuration&)>& user_goal_check_fn,
       const UncertaintyPlanningPolicyActionExecutionFunction& move_fn,
-      const double exec_time_limit, const DisplayFunction& display_fn,
-      const double policy_marker_size, const bool wait_for_user,
-      const double draw_wait) const
+      const ExecutionTimeLimit exec_time_limit,
+      const DisplayFunction& display_fn, const double policy_marker_size,
+      const bool wait_for_user, const double draw_wait) const
   {
     const uint32_t num_executions = static_cast<uint32_t>(start_configs.size());
     UncertaintyPlanningPolicy policy = immutable_policy;
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
     // Buffer for a teensy bit of time
     for (size_t iter = 0; iter < 100; iter++)
     {
       ros::spinOnce();
       ros::Duration(0.005).sleep();
     }
+#endif
     std::vector<ConfigVector> policy_trajectories(num_executions);
     std::vector<PolicyExecutionPerformance> policy_execution_performance(
         num_executions);
@@ -1568,31 +1668,23 @@ public:
     for (uint32_t idx = 0; idx < num_executions; idx++)
     {
       Log("Starting policy execution " + std::to_string(idx) + "...", 1);
-      const double start_time = ros::Time::now().toSec();
+      ExecutionTimer exec_timer{exec_time_limit};
       const std::function<bool(void)> policy_exec_termination_fn = [&] ()
       {
-        if (exec_time_limit > 0.0)
-        {
-          const double current_time = ros::Time::now().toSec();
-          const double elapsed = current_time - start_time;
-          if (elapsed >= exec_time_limit)
-          {
-            return true;
-          }
-        }
-        return false;
+        return exec_timer.expired();
       };
+      exec_timer.start();
       const auto policy_execution = PerformSinglePolicyExecution(
           policy, allow_branch_jumping, link_runtime_states_to_planned_parent,
           start_configs.at(idx), move_fn, user_goal_check_fn,
           policy_exec_termination_fn, display_fn, policy_marker_size,
           wait_for_user);
-      const double end_time = ros::Time::now().toSec();
-      Log("Started policy exec @ " + std::to_string(start_time)
-          + " finished policy exec @ " + std::to_string(end_time), 1);
-      const double execution_seconds = end_time - start_time;
+      exec_timer.stop();
+      Log("Started policy exec @ " + std::to_string(exec_timer.start_time())
+          + " finished policy exec @ " + std::to_string(exec_timer.stop_time()),
+          1);
       policy_execution_performance.at(idx) = PolicyExecutionPerformance(
-          policy_execution.ExecutionSteps(), execution_seconds,
+          policy_execution.ExecutionSteps(), exec_timer.duration(),
           policy_execution.ExecutionSuccess());
       policy_trajectories.at(idx) = policy_execution.ExecutionTrajectory();
       if (enable_cumulative_learning)
@@ -1644,11 +1736,11 @@ public:
         policy, policy_statistics, policy_execution_performance);
   }
 
-  static inline std_msgs::ColorRGBA MakeColor(
+  static inline ColorRGBA MakeColor(
       const float r, const float g, const float b, const float a)
   {
     return common_robotics_utilities::color_builder
-        ::MakeFromFloatColors<std_msgs::ColorRGBA>(r, g, b, a);
+        ::MakeFromFloatColors<ColorRGBA>(r, g, b, a);
   }
 
   inline SinglePolicyExecutionResult PerformSinglePolicyExecution(
@@ -1730,33 +1822,33 @@ public:
           = policy.GetRawPolicy().GetNodeImmutable(previous_state_idx)
               .GetValueImmutable();
       const Configuration parent_state_config = parent_state.GetExpectation();
-      std_msgs::ColorRGBA parent_state_color;
+      ColorRGBA parent_state_color;
       parent_state_color.r = 0.0f;
       parent_state_color.g = 0.5f;
       parent_state_color.b = 1.0f;
       parent_state_color.a = 0.5f;
-      const visualization_msgs::MarkerArray parent_state_markers
+      const MarkerArray parent_state_markers
           = simulator_ptr_->MakeConfigurationDisplayRep(
               robot_ptr_, parent_state_config, parent_state_color, 1,
               "parent_state_marker");
-      std_msgs::ColorRGBA current_config_color;
+      ColorRGBA current_config_color;
       current_config_color.r = 0.0f;
       current_config_color.g = 0.0f;
       current_config_color.b = 1.0f;
       current_config_color.a = 0.5f;
-      const visualization_msgs::MarkerArray current_config_markers
+      const MarkerArray current_config_markers
           = simulator_ptr_->MakeConfigurationDisplayRep(
               robot_ptr_, current_config, current_config_color, 1,
               "current_config_marker");
-      std_msgs::ColorRGBA action_color;
+      ColorRGBA action_color;
       action_color.r = 1.0f;
       action_color.g = 0.0f;
       action_color.b = 1.0f;
       action_color.a = 0.5f;
-      const visualization_msgs::MarkerArray action_markers
+      const MarkerArray action_markers
           = simulator_ptr_->MakeConfigurationDisplayRep(
               robot_ptr_, action, action_color, 1, "action_marker");
-      visualization_msgs::MarkerArray policy_query_markers;
+      MarkerArray policy_query_markers;
       policy_query_markers.markers.insert(
           policy_query_markers.markers.end(),
           parent_state_markers.markers.begin(),
@@ -1833,9 +1925,9 @@ protected:
     */
   inline void ClearAndRedrawEnvironment(const DisplayFunction& display_fn) const
   {
-    visualization_msgs::MarkerArray display_markers;
+    MarkerArray display_markers;
     display_markers.markers.push_back(MakeEraseMarker());
-    const visualization_msgs::MarkerArray environment_markers
+    const MarkerArray environment_markers
         = MakeEnvironmentDisplayRep();
     display_markers.markers.insert(
         display_markers.markers.end(),
@@ -1847,7 +1939,7 @@ protected:
   inline void DrawParticlePolicyExecution(
       const std::string& ns, const ConfigVector& trajectory,
       const DisplayFunction& display_fn, const double draw_wait,
-      const std_msgs::ColorRGBA& color) const
+      const ColorRGBA& color) const
   {
     if (trajectory.size() > 1)
     {
@@ -1856,16 +1948,16 @@ protected:
       for (const auto& current_configuration : trajectory)
       {
         // Draw a ball at the current location
-        const visualization_msgs::MarkerArray current_markers
+        const MarkerArray current_markers
             = simulator_ptr_->MakeConfigurationDisplayRep(
                 robot_ptr_, current_configuration, color, 1,
                 "current_policy_exec");
-        const visualization_msgs::MarkerArray trace_markers
+        const MarkerArray trace_markers
             = simulator_ptr_->MakeConfigurationDisplayRep(
                 robot_ptr_, current_configuration, color, trace_marker_idx, ns);
         trace_marker_idx += static_cast<int32_t>(trace_markers.markers.size());
         // Send the markers for display
-        visualization_msgs::MarkerArray display_markers;
+        MarkerArray display_markers;
         display_markers.markers.insert(
             display_markers.markers.end(),
             current_markers.markers.begin(),
@@ -1889,8 +1981,8 @@ protected:
       const UncertaintyPlanningPolicy& policy, const double marker_size,
       const std::string& policy_name, const DisplayFunction& display_fn) const
   {
-    visualization_msgs::MarkerArray policy_display_markers;
-    const visualization_msgs::MarkerArray policy_markers
+    MarkerArray policy_display_markers;
+    const MarkerArray policy_markers
         = MakePolicyDisplayRep(policy, marker_size, policy_name);
     policy_display_markers.markers.insert(
         policy_display_markers.markers.end(),
@@ -1901,11 +1993,11 @@ protected:
 
   inline void DrawLocalPolicy(
       const UncertaintyPlanningPolicy& policy, const double marker_size,
-      const int64_t current_state_idx, const std_msgs::ColorRGBA& color,
+      const int64_t current_state_idx, const ColorRGBA& color,
       const std::string& policy_name, const DisplayFunction& display_fn) const
   {
-    visualization_msgs::MarkerArray policy_display_markers;
-    const visualization_msgs::MarkerArray policy_markers
+    MarkerArray policy_display_markers;
+    const MarkerArray policy_markers
         = MakeLocalPolicyDisplayRep(
             policy, marker_size, current_state_idx, color, policy_name);
     policy_display_markers.markers.insert(
@@ -1915,36 +2007,36 @@ protected:
     display_fn(policy_display_markers);
   }
 
-  inline visualization_msgs::Marker MakeEraseMarker() const
+  inline Marker MakeEraseMarker() const
   {
-    visualization_msgs::Marker erase_marker;
-    erase_marker.action = visualization_msgs::Marker::DELETEALL;
+    Marker erase_marker;
+    erase_marker.action = Marker::DELETEALL;
     return erase_marker;
   }
 
-  inline visualization_msgs::MarkerArray MakeEraseMarkers() const
+  inline MarkerArray MakeEraseMarkers() const
   {
-    visualization_msgs::MarkerArray erase_markers;
+    MarkerArray erase_markers;
     erase_markers.markers = {MakeEraseMarker()};
     return erase_markers;
   }
 
-  inline visualization_msgs::MarkerArray MakeEnvironmentDisplayRep() const
+  inline MarkerArray MakeEnvironmentDisplayRep() const
   {
     return simulator_ptr_->MakeEnvironmentDisplayRep();
   }
 
-  inline visualization_msgs::MarkerArray MakePolicyDisplayRep(
+  inline MarkerArray MakePolicyDisplayRep(
       const UncertaintyPlanningPolicy& policy, const double marker_size,
       const std::string& policy_name) const
   {
     const ExecutionPolicyGraph& policy_graph = policy.GetRawPolicy();
     const common_robotics_utilities::simple_graph_search::DijkstrasResult&
         policy_dijkstras = policy.GetRawPolicyDijkstrasResult();
-    visualization_msgs::MarkerArray policy_markers;
-    const std_msgs::ColorRGBA forward_color = MakeColor(0.0f, 0.0f, 0.0f, 1.0f);
-    const std_msgs::ColorRGBA backward_color = forward_color;
-    const std_msgs::ColorRGBA blue_color = MakeColor(0.0f, 0.0f, 1.0f, 1.0f);
+    MarkerArray policy_markers;
+    const ColorRGBA forward_color = MakeColor(0.0f, 0.0f, 0.0f, 1.0f);
+    const ColorRGBA backward_color = forward_color;
+    const ColorRGBA blue_color = MakeColor(0.0f, 0.0f, 1.0f, 1.0f);
     for (size_t idx = 0; idx < policy_graph.Size(); idx++)
     {
       const int64_t current_index = idx;
@@ -1959,7 +2051,7 @@ protected:
         const Configuration& current_config
             = policy_graph.GetNodeImmutable(current_index).GetValueImmutable()
                 .GetExpectation();
-        const visualization_msgs::MarkerArray target_markers
+        const MarkerArray target_markers
             = simulator_ptr_->MakeConfigurationDisplayRep(
                 robot_ptr_, current_config, blue_color, 1, "policy_graph_goal");
         policy_markers.markers.insert(
@@ -1979,13 +2071,17 @@ protected:
             = simulator_ptr_->Get3dPointForConfig(robot_ptr_, current_config);
         const Eigen::Vector4d previous_config_point
             = simulator_ptr_->Get3dPointForConfig(robot_ptr_, previous_config);
-        visualization_msgs::Marker edge_marker;
-        edge_marker.action = visualization_msgs::Marker::ADD;
+        Marker edge_marker;
+        edge_marker.action = Marker::ADD;
         edge_marker.ns = policy_name;
         edge_marker.id = static_cast<int>(idx + 1);
         edge_marker.frame_locked = false;
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+        edge_marker.lifetime = rclcpp::Duration(0, 0);
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
         edge_marker.lifetime = ros::Duration(0.0);
-        edge_marker.type = visualization_msgs::Marker::ARROW;
+#endif
+        edge_marker.type = Marker::ARROW;
         edge_marker.header.frame_id = simulator_ptr_->GetFrame();
         edge_marker.scale.x = marker_size;
         edge_marker.scale.y = marker_size * 2.0;
@@ -2017,15 +2113,15 @@ protected:
     return policy_markers;
   }
 
-  inline visualization_msgs::MarkerArray MakeLocalPolicyDisplayRep(
+  inline MarkerArray MakeLocalPolicyDisplayRep(
       const UncertaintyPlanningPolicy& policy, const double marker_size,
-      const int64_t current_state_idx, const std_msgs::ColorRGBA& color,
+      const int64_t current_state_idx, const ColorRGBA& color,
       const std::string& policy_name) const
   {
     const ExecutionPolicyGraph& policy_graph = policy.GetRawPolicy();
     const common_robotics_utilities::simple_graph_search::DijkstrasResult&
         policy_dijkstras = policy.GetRawPolicyDijkstrasResult();
-    visualization_msgs::MarkerArray policy_markers;
+    MarkerArray policy_markers;
     const Configuration previous_config
         = policy_graph.GetNodeImmutable(current_state_idx).GetValueImmutable()
             .GetExpectation();
@@ -2042,14 +2138,18 @@ protected:
               .GetExpectation();
       const Eigen::Vector4d current_config_point
           = simulator_ptr_->Get3dPointForConfig(robot_ptr_, current_config);
-      visualization_msgs::Marker edge_marker;
-      edge_marker.action = visualization_msgs::Marker::ADD;
+      Marker edge_marker;
+      edge_marker.action = Marker::ADD;
       edge_marker.ns = policy_name;
       edge_marker.id = idx;
       idx++;
       edge_marker.frame_locked = false;
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+      edge_marker.lifetime = rclcpp::Duration(0, 0);
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
       edge_marker.lifetime = ros::Duration(0.0);
-      edge_marker.type = visualization_msgs::Marker::ARROW;
+#endif
+      edge_marker.type = Marker::ARROW;
       edge_marker.header.frame_id = simulator_ptr_->GetFrame();
       edge_marker.scale.x = marker_size;
       edge_marker.scale.y = marker_size * 2.0;
@@ -2076,15 +2176,15 @@ protected:
     return policy_markers;
   }
 
-  inline visualization_msgs::MarkerArray MakeParticlesDisplayRep(
-      const ConfigVector& particles, const std_msgs::ColorRGBA& color,
+  inline MarkerArray MakeParticlesDisplayRep(
+      const ConfigVector& particles, const ColorRGBA& color,
       const std::string& ns) const
   {
-    visualization_msgs::MarkerArray markers;
+    MarkerArray markers;
     int32_t starting_idx = 1;
     for (const auto& particle : particles)
     {
-      const visualization_msgs::MarkerArray particle_markers
+      const MarkerArray particle_markers
           = simulator_ptr_->MakeConfigurationDisplayRep(
               robot_ptr_, particle, color, starting_idx, ns);
       markers.markers.insert(
@@ -2096,15 +2196,15 @@ protected:
     return markers;
   }
 
-  inline visualization_msgs::MarkerArray MakeParticlesDisplayRep(
+  inline MarkerArray MakeParticlesDisplayRep(
       const std::vector<SimulationResult<Configuration>>& particles,
-      const std_msgs::ColorRGBA& color, const std::string& ns) const
+      const ColorRGBA& color, const std::string& ns) const
   {
-    visualization_msgs::MarkerArray markers;
+    MarkerArray markers;
     int32_t starting_idx = 1;
     for (const auto& particle : particles)
     {
-      const visualization_msgs::MarkerArray particle_markers
+      const MarkerArray particle_markers
           = simulator_ptr_->MakeConfigurationDisplayRep(
               robot_ptr_, particle.ResultConfig(), color, starting_idx, ns);
       markers.markers.insert(
@@ -2356,7 +2456,7 @@ protected:
         display_fn(MakeParticlesDisplayRep(
             current_cluster,
             common_robotics_utilities::color_builder
-                ::LookupUniqueColor<std_msgs::ColorRGBA>(
+                ::LookupUniqueColor<ColorRGBA>(
                     static_cast<uint32_t>(idx + 1), 1.0f),
             "result_cluster_" + std::to_string(idx + 1)));
       }
@@ -2492,7 +2592,7 @@ protected:
     if (debug_level_ >= 1)
     {
       // Draw the expansion
-      visualization_msgs::MarkerArray propagation_display_rep;
+      MarkerArray propagation_display_rep;
       // Check if the expansion was useful
       if (forward_propagated_states.CombinedForwardPropagations().size() > 0)
       {
@@ -2515,7 +2615,7 @@ protected:
               = current_state.GetReverseEdgePfeasibility();
           // Now we get markers corresponding to the current states
           // Make the display color
-          std_msgs::ColorRGBA forward_color;
+          ColorRGBA forward_color;
           forward_color.r = static_cast<float>(1.0 - motion_Pfeasibility);
           forward_color.g = static_cast<float>(1.0 - motion_Pfeasibility);
           forward_color.b = static_cast<float>(1.0 - motion_Pfeasibility);
@@ -2524,7 +2624,7 @@ protected:
           const std::string forward_expectation_marker_ns
               = (edge_Pfeasibility == 1.0)
                   ? "forward_expectation" : "split_forward_expectation";
-          const visualization_msgs::MarkerArray forward_expectation_markers
+          const MarkerArray forward_expectation_markers
               = simulator_ptr_->MakeConfigurationDisplayRep(
                   robot_ptr_, current_state.GetExpectation(), forward_color,
                   static_cast<int32_t>(
@@ -2537,7 +2637,7 @@ protected:
           if (reverse_edge_Pfeasibility > 0.5)
           {
             // Make the display color
-            std_msgs::ColorRGBA reverse_color;
+            ColorRGBA reverse_color;
             reverse_color.r = static_cast<float>(1.0 - motion_Pfeasibility);
             reverse_color.g = static_cast<float>(1.0 - motion_Pfeasibility);
             reverse_color.b = static_cast<float>(1.0 - motion_Pfeasibility);
@@ -2545,7 +2645,7 @@ protected:
             const std::string reverse_expectation_marker_ns
                 = (edge_Pfeasibility == 1.0)
                     ? "reverse_expectation" : "split_reverse_expectation";
-            const visualization_msgs::MarkerArray reverse_expectation_markers
+            const MarkerArray reverse_expectation_markers
                 = simulator_ptr_->MakeConfigurationDisplayRep(
                     robot_ptr_, current_state.GetExpectation(), reverse_color,
                     static_cast<int32_t>(

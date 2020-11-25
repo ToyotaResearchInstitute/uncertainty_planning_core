@@ -17,12 +17,23 @@
 #include <common_robotics_utilities/simple_graph_search.hpp>
 #include <common_robotics_utilities/simple_knearest_neighbors.hpp>
 #include <uncertainty_planning_core/uncertainty_planner_state.hpp>
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+#include <visualization_msgs/msg/marker_array.hpp>
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
 #include <visualization_msgs/MarkerArray.h>
+#else
+#error "Undefined or unknown UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION"
+#endif
 
 namespace uncertainty_planning_core
 {
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+using DisplayFunction
+    = std::function<void(const visualization_msgs::msg::MarkerArray&)>;
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
 using DisplayFunction
     = std::function<void(const visualization_msgs::MarkerArray&)>;
+#endif
 using LoggingFunction
     = std::function<void(const std::string&, const int32_t)>;
 

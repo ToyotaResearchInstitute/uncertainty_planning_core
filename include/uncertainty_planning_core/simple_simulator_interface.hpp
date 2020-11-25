@@ -16,8 +16,15 @@
 #include <common_robotics_utilities/print.hpp>
 #include <common_robotics_utilities/conversions.hpp>
 #include <common_robotics_utilities/simple_robot_model_interface.hpp>
-#include <ros/ros.h>
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+#include <std_msgs/msg/color_rgba.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
+#include <std_msgs/ColorRGBA.h>
 #include <visualization_msgs/MarkerArray.h>
+#else
+#error "Undefined or unknown UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION"
+#endif
 #include <omp.h>
 
 namespace uncertainty_planning_core
@@ -142,6 +149,14 @@ protected:
       ::SimpleRobotModelInterface<Configuration, ConfigAlloc>;
 
 public:
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+  using ColorRGBA = std_msgs::msg::ColorRGBA;
+  using MarkerArray = visualization_msgs::msg::MarkerArray;
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
+  using ColorRGBA = std_msgs::ColorRGBA;
+  using MarkerArray = visualization_msgs::MarkerArray;
+#endif
+
   virtual ~SimpleSimulatorInterface() {}
 
   virtual int32_t GetDebugLevel() const = 0;
@@ -152,19 +167,19 @@ public:
 
   virtual std::string GetFrame() const = 0;
 
-  virtual visualization_msgs::MarkerArray MakeEnvironmentDisplayRep() const = 0;
+  virtual MarkerArray MakeEnvironmentDisplayRep() const = 0;
 
-  virtual visualization_msgs::MarkerArray MakeConfigurationDisplayRep(
+  virtual MarkerArray MakeConfigurationDisplayRep(
       const std::shared_ptr<Robot>& immutable_robot,
-      const Configuration& configuration, const std_msgs::ColorRGBA& color,
+      const Configuration& configuration, const ColorRGBA& color,
       const int32_t starting_index,
       const std::string& config_marker_ns) const = 0;
 
-  virtual visualization_msgs::MarkerArray MakeControlInputDisplayRep(
+  virtual MarkerArray MakeControlInputDisplayRep(
       const std::shared_ptr<Robot>& immutable_robot,
       const Configuration& configuration,
       const Eigen::VectorXd& control_input,
-      const std_msgs::ColorRGBA& color, const int32_t starting_index,
+      const ColorRGBA& color, const int32_t starting_index,
       const std::string& control_input_marker_ns) const = 0;
 
   virtual Eigen::Vector4d Get3dPointForConfig(
@@ -184,8 +199,7 @@ public:
       const Configuration& target_position, const bool allow_contacts,
       ForwardSimulationStepTrace<Configuration, ConfigAlloc>& trace,
       const bool enable_tracing,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 
   virtual SimulationResult<Configuration> ForwardSimulateRobot(
       const std::shared_ptr<Robot>& immutable_robot,
@@ -193,24 +207,21 @@ public:
       const bool allow_contacts,
       ForwardSimulationStepTrace<Configuration, ConfigAlloc>& trace,
       const bool enable_tracing,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 
   virtual std::vector<SimulationResult<Configuration>> ForwardSimulateRobots(
       const std::shared_ptr<Robot>& immutable_robot,
       const std::vector<Configuration, ConfigAlloc>& start_positions,
       const std::vector<Configuration, ConfigAlloc>& target_positions,
       const bool allow_contacts,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 
   virtual SimulationResult<Configuration> ReverseSimulateMutableRobot(
       const std::shared_ptr<Robot>& mutable_robot,
       const Configuration& target_position, const bool allow_contacts,
       ForwardSimulationStepTrace<Configuration, ConfigAlloc>& trace,
       const bool enable_tracing,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 
   virtual SimulationResult<Configuration> ReverseSimulateRobot(
       const std::shared_ptr<Robot>& immutable_robot,
@@ -218,16 +229,14 @@ public:
       const bool allow_contacts,
       ForwardSimulationStepTrace<Configuration, ConfigAlloc>& trace,
       const bool enable_tracing,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 
   virtual std::vector<SimulationResult<Configuration>> ReverseSimulateRobots(
       const std::shared_ptr<Robot>& immutable_robot,
       const std::vector<Configuration, ConfigAlloc>& start_positions,
       const std::vector<Configuration, ConfigAlloc>& target_positions,
       const bool allow_contacts,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 };
 
 template<typename Configuration>
