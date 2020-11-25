@@ -11,6 +11,65 @@ This package is the core of our framework for motion planning and execution with
 
 While the planner and execution policy are themselves template-based, this package provides a library containing concrete instantiations of the planner for different types of robot. When possible, you should use these rather than interfacing with the planner directly.
 
+## Setup
+
+`uncertainty_planning_core` is a ROS package.
+
+Thus, it is best to build it within a ROS workspace:
+
+```sh
+mkdir -p ~/ws/src
+cd ~/ws/src
+git clone https://github.com/calderpg/uncertainty_planning_core
+```
+
+This package officially supports [ROS 1 Melodic](http://wiki.ros.org/ROS/Installation)
+and [ROS 2 Dashing+](https://index.ros.org/doc/ros2/Installation/) distributions, but
+ROS 1 Kinetic should also be compatible.
+Make sure to symlink the corresponding `CMakeLists.txt` and `package.xml` files
+for the ROS distribution of choice:
+
+*For ROS 1 Melodic*
+```sh
+cd ~/ws/src/uncertainty_planning_core
+ln -sT CMakeLists.txt.ros1 CMakeLists.txt
+ln -sT package.xml.ros1 package.xml
+```
+
+*For ROS 2 Dashing+*
+```sh
+cd ~/ws/src/uncertainty_planning_core
+ln -sT CMakeLists.txt.ros2 CMakeLists.txt
+ln -sT package.xml.ros2 package.xml
+```
+
+Finally, use [`rosdep`](https://docs.ros.org/independent/api/rosdep/html/)
+to ensure all dependencies in the `package.xml` are satisfied:
+
+```sh
+cd ~/ws
+rosdep install -i -y --from-path src
+```
+
+## Building
+
+Use [`catkin_make`](http://wiki.ros.org/catkin/commands/catkin_make) or
+[`colcon`](https://colcon.readthedocs.io/en/released/) accordingly.
+
+*For ROS 1 Melodic*
+```sh
+cd ~/ws
+catkin_make  # the entire workspace
+catkin_make --pkg uncertainty_planning_core  # the package only
+```
+
+*For ROS 2 Dashing +*
+```sh
+cd ~/ws
+colcon build  # the entire workspace
+colcon build --packages-select uncertainty_planning_core  # the package only
+```
+
 ## Dependencies
 
 - [common_robotics_utilities](https://github.com/calderpg/common_robotics_utilities)
@@ -19,7 +78,7 @@ Provides a range of utility and math functions, as well as templated implementat
 
 - [ROS](http://ros.org)
 
-ROS is required for the build system, Catkin, and for RViz, which the planner uses as an optional visualization interface. ROS Melodic is officially supported, but ROS Kinetic should also be compatible.
+ROS is required for the build system and for RViz, which the planner uses as an optional visualization interface.
 
 ## Examples
 
