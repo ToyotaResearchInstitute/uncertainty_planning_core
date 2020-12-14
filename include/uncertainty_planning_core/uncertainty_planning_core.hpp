@@ -18,11 +18,10 @@
 #include <common_robotics_utilities/simple_robot_model_interface.hpp>
 #include <common_robotics_utilities/zlib_helpers.hpp>
 #include <uncertainty_planning_core/execution_policy.hpp>
+#include <uncertainty_planning_core/ros_integration.hpp>
 #include <uncertainty_planning_core/simple_simulator_interface.hpp>
 #include <uncertainty_planning_core/uncertainty_planner_state.hpp>
 #include <uncertainty_planning_core/uncertainty_contact_planning.hpp>
-#include <ros/ros.h>
-#include <visualization_msgs/MarkerArray.h>
 
 namespace uncertainty_planning_core
 {
@@ -52,7 +51,7 @@ struct PLANNING_AND_EXECUTION_OPTIONS
   uint32_t policy_action_attempt_count = 0u;
   // Execution limits
   uint32_t max_exec_actions = 0u;
-  double max_policy_exec_time = 0.0;
+  ExecutionTimeLimit max_policy_exec_time{0.0};
   // Control flags
   int32_t debug_level = 0;
   bool use_contact = false;
@@ -65,6 +64,83 @@ struct PLANNING_AND_EXECUTION_OPTIONS
   std::string executed_policy_file;
 };
 
+#if UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 2
+inline PLANNING_AND_EXECUTION_OPTIONS GetOptions(
+    rclcpp::Node::SharedPtr node,
+    const PLANNING_AND_EXECUTION_OPTIONS& initial_options)
+{
+  PLANNING_AND_EXECUTION_OPTIONS options = initial_options;
+  // Get options via ROS params
+  options.planner_time_limit
+      = node->declare_parameter("planner_time_limit",
+                                options.planner_time_limit);
+  options.p_goal_reached_termination_threshold
+      = node->declare_parameter("p_goal_reached_termination_threshold",
+                  options.p_goal_reached_termination_threshold);
+  options.goal_bias = node->declare_parameter("goal_bias", options.goal_bias);
+  options.step_size = node->declare_parameter("step_size", options.step_size);
+  options.goal_probability_threshold
+      = node->declare_parameter("goal_probability_threshold",
+                                options.goal_probability_threshold);
+  options.goal_distance_threshold
+      = node->declare_parameter("goal_distance_threshold",
+                                options.goal_distance_threshold);
+  options.connect_after_first_solution
+      = node->declare_parameter("connect_after_first_solution",
+                                options.connect_after_first_solution);
+  options.feasibility_alpha
+      = node->declare_parameter("feasibility_alpha",
+                                options.feasibility_alpha);
+  options.variance_alpha
+      = node->declare_parameter("variance_alpha", options.variance_alpha);
+  options.num_particles
+      = static_cast<uint32_t>(node->declare_parameter("num_particles",
+                              static_cast<int>(options.num_particles)));
+  options.planner_log_file
+      = node->declare_parameter("planner_log_file", options.planner_log_file);
+  options.planned_policy_file
+      = node->declare_parameter("planned_policy_file",
+                                options.planned_policy_file);
+  options.policy_action_attempt_count
+      = static_cast<uint32_t>(
+          node->declare_parameter("policy_action_attempt_count",
+              static_cast<int>(options.policy_action_attempt_count)));
+  options.debug_level
+      = static_cast<int32_t>(
+          node->declare_parameter("debug_level", options.debug_level));
+  options.use_contact
+      = node->declare_parameter("use_contact", options.use_contact);
+  options.use_reverse
+      = node->declare_parameter("use_reverse", options.use_reverse);
+  options.num_policy_simulations
+      = static_cast<uint32_t>(
+          node->declare_parameter("num_policy_simulations",
+              static_cast<int>(options.num_policy_simulations)));
+  options.num_policy_executions
+      = static_cast<uint32_t>(
+          node->declare_parameter("num_policy_executions",
+              static_cast<int>(options.num_policy_executions)));
+  options.policy_log_file
+      = node->declare_parameter("policy_log_file", options.policy_log_file);
+  options.executed_policy_file
+      = node->declare_parameter("executed_policy_file",
+                                options.executed_policy_file);
+  options.max_exec_actions
+      = static_cast<uint32_t>(
+          node->declare_parameter("max_exec_actions",
+              static_cast<int>(options.max_exec_actions)));
+  options.max_policy_exec_time
+      = ExecutionTimeLimit(
+          node->declare_parameter("max_policy_exec_time",
+              options.max_policy_exec_time.Seconds()),
+          node->get_clock());
+  options.policy_action_attempt_count
+      = static_cast<uint32_t>(
+          node->declare_parameter("policy_action_attempt_count",
+              static_cast<int>(options.policy_action_attempt_count)));
+  return options;
+}
+#elif UNCERTAINTY_PLANNING_CORE__SUPPORTED_ROS_VERSION == 1
 inline PLANNING_AND_EXECUTION_OPTIONS GetOptions(
     const PLANNING_AND_EXECUTION_OPTIONS& initial_options)
 {
@@ -129,14 +205,15 @@ inline PLANNING_AND_EXECUTION_OPTIONS GetOptions(
           nhp.param(std::string("max_exec_actions"),
                     static_cast<int>(options.max_exec_actions)));
   options.max_policy_exec_time
-      = nhp.param(std::string("max_policy_exec_time"),
-                  options.max_policy_exec_time);
+      = ExecutionTimeLimit(nhp.param(std::string("max_policy_exec_time"),
+                                     options.max_policy_exec_time.Seconds()));
   options.policy_action_attempt_count
       = static_cast<uint32_t>(
           nhp.param(std::string("policy_action_attempt_count"),
                     static_cast<int>(options.policy_action_attempt_count)));
   return options;
 }
+#endif
 
 // Policy and tree type definitions
 

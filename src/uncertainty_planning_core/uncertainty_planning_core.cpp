@@ -18,8 +18,6 @@
 #include <uncertainty_planning_core/uncertainty_contact_planning.hpp>
 #include <uncertainty_planning_core/uncertainty_planner_state.hpp>
 #include <uncertainty_planning_core/uncertainty_planning_core.hpp>
-#include <ros/ros.h>
-#include <visualization_msgs/MarkerArray.h>
 
 namespace uncertainty_planning_core
 {

@@ -16,8 +16,7 @@
 #include <common_robotics_utilities/print.hpp>
 #include <common_robotics_utilities/conversions.hpp>
 #include <common_robotics_utilities/simple_robot_model_interface.hpp>
-#include <ros/ros.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <uncertainty_planning_core/ros_integration.hpp>
 #include <omp.h>
 
 namespace uncertainty_planning_core
@@ -152,19 +151,19 @@ public:
 
   virtual std::string GetFrame() const = 0;
 
-  virtual visualization_msgs::MarkerArray MakeEnvironmentDisplayRep() const = 0;
+  virtual MarkerArray MakeEnvironmentDisplayRep() const = 0;
 
-  virtual visualization_msgs::MarkerArray MakeConfigurationDisplayRep(
+  virtual MarkerArray MakeConfigurationDisplayRep(
       const std::shared_ptr<Robot>& immutable_robot,
-      const Configuration& configuration, const std_msgs::ColorRGBA& color,
+      const Configuration& configuration, const ColorRGBA& color,
       const int32_t starting_index,
       const std::string& config_marker_ns) const = 0;
 
-  virtual visualization_msgs::MarkerArray MakeControlInputDisplayRep(
+  virtual MarkerArray MakeControlInputDisplayRep(
       const std::shared_ptr<Robot>& immutable_robot,
       const Configuration& configuration,
       const Eigen::VectorXd& control_input,
-      const std_msgs::ColorRGBA& color, const int32_t starting_index,
+      const ColorRGBA& color, const int32_t starting_index,
       const std::string& control_input_marker_ns) const = 0;
 
   virtual Eigen::Vector4d Get3dPointForConfig(
@@ -184,8 +183,7 @@ public:
       const Configuration& target_position, const bool allow_contacts,
       ForwardSimulationStepTrace<Configuration, ConfigAlloc>& trace,
       const bool enable_tracing,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 
   virtual SimulationResult<Configuration> ForwardSimulateRobot(
       const std::shared_ptr<Robot>& immutable_robot,
@@ -193,24 +191,21 @@ public:
       const bool allow_contacts,
       ForwardSimulationStepTrace<Configuration, ConfigAlloc>& trace,
       const bool enable_tracing,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 
   virtual std::vector<SimulationResult<Configuration>> ForwardSimulateRobots(
       const std::shared_ptr<Robot>& immutable_robot,
       const std::vector<Configuration, ConfigAlloc>& start_positions,
       const std::vector<Configuration, ConfigAlloc>& target_positions,
       const bool allow_contacts,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 
   virtual SimulationResult<Configuration> ReverseSimulateMutableRobot(
       const std::shared_ptr<Robot>& mutable_robot,
       const Configuration& target_position, const bool allow_contacts,
       ForwardSimulationStepTrace<Configuration, ConfigAlloc>& trace,
       const bool enable_tracing,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 
   virtual SimulationResult<Configuration> ReverseSimulateRobot(
       const std::shared_ptr<Robot>& immutable_robot,
@@ -218,16 +213,14 @@ public:
       const bool allow_contacts,
       ForwardSimulationStepTrace<Configuration, ConfigAlloc>& trace,
       const bool enable_tracing,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 
   virtual std::vector<SimulationResult<Configuration>> ReverseSimulateRobots(
       const std::shared_ptr<Robot>& immutable_robot,
       const std::vector<Configuration, ConfigAlloc>& start_positions,
       const std::vector<Configuration, ConfigAlloc>& target_positions,
       const bool allow_contacts,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 };
 
 template<typename Configuration>

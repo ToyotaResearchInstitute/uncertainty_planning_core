@@ -8,8 +8,8 @@
 
 #include <common_robotics_utilities/math.hpp>
 #include <common_robotics_utilities/simple_robot_model_interface.hpp>
+#include <uncertainty_planning_core/ros_integration.hpp>
 #include <uncertainty_planning_core/simple_simulator_interface.hpp>
-#include <visualization_msgs/MarkerArray.h>
 
 namespace uncertainty_planning_core
 {
@@ -35,14 +35,12 @@ public:
   virtual std::vector<std::vector<int64_t>> ClusterParticles(
       const std::shared_ptr<Robot>& robot,
       const std::vector<SimulationResult<Configuration>>& particles,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 
   virtual std::vector<uint8_t> IdentifyClusterMembers(
       const std::shared_ptr<Robot>& robot,
       const std::vector<Configuration, ConfigAlloc>& cluster,
       const std::vector<SimulationResult<Configuration>>& particles,
-      const std::function<void(
-          const visualization_msgs::MarkerArray&)>& display_fn) = 0;
+      const std::function<void(const MarkerArray&)>& display_fn) = 0;
 };
 }  // namespace uncertainty_planning_core

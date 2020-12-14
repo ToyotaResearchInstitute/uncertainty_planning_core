@@ -16,13 +16,12 @@
 #include <common_robotics_utilities/simple_graph.hpp>
 #include <common_robotics_utilities/simple_graph_search.hpp>
 #include <common_robotics_utilities/simple_knearest_neighbors.hpp>
+#include <uncertainty_planning_core/ros_integration.hpp>
 #include <uncertainty_planning_core/uncertainty_planner_state.hpp>
-#include <visualization_msgs/MarkerArray.h>
 
 namespace uncertainty_planning_core
 {
-using DisplayFunction
-    = std::function<void(const visualization_msgs::MarkerArray&)>;
+
 using LoggingFunction
     = std::function<void(const std::string&, const int32_t)>;
 

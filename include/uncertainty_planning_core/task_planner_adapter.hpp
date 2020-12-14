@@ -13,12 +13,11 @@
 #include <random>
 #include <atomic>
 #include <Eigen/Geometry>
-#include <ros/ros.h>
-#include <visualization_msgs/Marker.h>
 #include <common_robotics_utilities/math.hpp>
 #include <common_robotics_utilities/openmp_helpers.hpp>
 #include <common_robotics_utilities/conversions.hpp>
 #include <common_robotics_utilities/print.hpp>
+#include <uncertainty_planning_core/ros_integration.hpp>
 #include <uncertainty_planning_core/uncertainty_planning_core.hpp>
 #include <omp.h>
 
@@ -955,7 +954,7 @@ private:
     logging_fn_(message, level);
   }
 
-  void Draw(const visualization_msgs::MarkerArray& markers)
+  void Draw(const MarkerArray& markers)
   {
     drawing_fn_(markers);
   }
@@ -1467,15 +1466,15 @@ public:
     return "world";
   }
 
-  virtual visualization_msgs::MarkerArray MakeEnvironmentDisplayRep() const
+  virtual MarkerArray MakeEnvironmentDisplayRep() const
   {
-    return visualization_msgs::MarkerArray();
+    return MarkerArray();
   }
 
-  virtual visualization_msgs::MarkerArray MakeConfigurationDisplayRep(
+  virtual MarkerArray MakeConfigurationDisplayRep(
       const TaskStateRobotBasePtr& immutable_robot,
       const State& configuration,
-      const std_msgs::ColorRGBA& color,
+      const ColorRGBA& color,
       const int32_t starting_index,
       const std::string& config_marker_ns) const
   {
@@ -1484,14 +1483,14 @@ public:
     UNUSED(color);
     UNUSED(starting_index);
     UNUSED(config_marker_ns);
-    return visualization_msgs::MarkerArray();
+    return MarkerArray();
   }
 
-  virtual visualization_msgs::MarkerArray MakeControlInputDisplayRep(
+  virtual MarkerArray MakeControlInputDisplayRep(
       const TaskStateRobotBasePtr& immutable_robot,
       const State& configuration,
       const Eigen::VectorXd& control_input,
-      const std_msgs::ColorRGBA& color,
+      const ColorRGBA& color,
       const int32_t starting_index,
       const std::string& control_input_marker_ns) const
   {
@@ -1501,7 +1500,7 @@ public:
     UNUSED(color);
     UNUSED(starting_index);
     UNUSED(control_input_marker_ns);
-    return visualization_msgs::MarkerArray();
+    return MarkerArray();
   }
 
   virtual Eigen::Vector4d Get3dPointForConfig(
